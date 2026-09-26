@@ -36,13 +36,14 @@ inline constexpr char kWebPage[] = R"HTML(
 </main>
 <script>
 const themeBtn=document.getElementById('themeBtn'),themeColor=document.getElementById('themeColor'),errorBox=document.getElementById('errorBox'),ipChip=document.getElementById('ipChip'),distanceChip=document.getElementById('distanceChip'),motionChip=document.getElementById('motionChip'),safetyChip=document.getElementById('safetyChip'),telegramToggle=document.getElementById('telegramToggle'),telegramHint=document.getElementById('telegramHint');
-let state={mode:'manual',telegramEnabled:false,telegramConfigured:false};let holdTimer=null;let heldDir=null;let commandSequence=Date.now();
+let state={mode:'manual',telegramEnabled:false,telegramConfigured:false};let holdTimer=null;let heldDir=null;let heartbeatInFlight=false;let commandSequence=Date.now();
 function showPanel(id,button){document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.menu button').forEach(x=>x.classList.remove('active'));document.getElementById(id).classList.add('active');button.classList.add('active')}
 function toggleTheme(){const dark=document.body.classList.toggle('dark');themeBtn.textContent=dark?'☀️':'🌙';themeColor.content=dark?'#0c1220':'#eef4ff';localStorage.setItem('kylio-theme',dark?'dark':'light')}
 function showError(message=''){errorBox.textContent=message;errorBox.classList.toggle('show',!!message)}
 async function request(url,keepalive=false){try{const response=await fetch(url,{cache:'no-store',keepalive});if(!response.ok)throw new Error((await response.text())||`HTTP ${response.status}`);showError();return response}catch(error){showError(error.message);throw error}}
 function command(dir,on,keepalive=!on){const sequence=++commandSequence;return request(`/cmd?dir=${encodeURIComponent(dir)}&state=${on?1:0}&seq=${sequence}`,keepalive)}
-function beginHold(event){if(state.telegramEnabled)return;event.preventDefault();endHold();heldDir=event.currentTarget.dataset.dir;if(event.currentTarget.setPointerCapture)event.currentTarget.setPointerCapture(event.pointerId);command(heldDir,true).catch(()=>{});holdTimer=setInterval(()=>command(heldDir,true).catch(()=>{}),100)}
+function sendHeartbeat(){if(!heldDir||heartbeatInFlight)return;const direction=heldDir;heartbeatInFlight=true;command(direction,true).catch(()=>{}).finally(()=>{heartbeatInFlight=false})}
+function beginHold(event){if(state.telegramEnabled)return;event.preventDefault();endHold();heldDir=event.currentTarget.dataset.dir;if(event.currentTarget.setPointerCapture)event.currentTarget.setPointerCapture(event.pointerId);sendHeartbeat();holdTimer=setInterval(sendHeartbeat,100)}
 function endHold(){if(holdTimer){clearInterval(holdTimer);holdTimer=null}if(heldDir){const direction=heldDir;heldDir=null;command(direction,false).catch(()=>{})}}
 function emergencyStop(){endHold();command('s',true,true).then(refresh).catch(()=>{})}
 async function setMode(path,key,value){endHold();await request(`/${path}?${key}=${value}`);await refresh()}

@@ -261,6 +261,13 @@ esp_err_t not_found_handler(httpd_req_t *request, httpd_err_code_t)
     return send_text(request, "404 Not Found", "Not found");
 }
 
+esp_err_t favicon_handler(httpd_req_t *request)
+{
+    if (!authenticate(request)) return ESP_OK;
+    httpd_resp_set_status(request, "204 No Content");
+    return httpd_resp_send(request, nullptr, 0);
+}
+
 void register_get(const char *uri, esp_err_t (*handler)(httpd_req_t *))
 {
     const httpd_uri_t route = {
@@ -276,6 +283,10 @@ void register_get(const char *uri, esp_err_t (*handler)(httpd_req_t *))
 
 esp_err_t web_server_start()
 {
+    if (std::strcmp(app_config::kWebPassword, "change-me") == 0) {
+        ESP_LOGE(kTag, "Refusing to start with the default web password");
+        return ESP_ERR_INVALID_STATE;
+    }
     initialize_authorization_value();
     if (s_expected_authorization.empty()) {
         return ESP_FAIL;
@@ -298,6 +309,7 @@ esp_err_t web_server_start()
     register_get("/room", room_handler);
     register_get("/telegram", telegram_handler);
     register_get("/api/state", state_handler);
+    register_get("/favicon.ico", favicon_handler);
     httpd_register_err_handler(s_server, HTTPD_404_NOT_FOUND,
                                not_found_handler);
     ESP_LOGI(kTag, "HTTP server started");

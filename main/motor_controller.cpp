@@ -5,6 +5,9 @@
 
 namespace {
 
+MotorMotion s_last_motion = MotorMotion::Stop;
+bool s_motion_initialized = false;
+
 void set_wheel(gpio_num_t pin_a, gpio_num_t pin_b, int direction)
 {
     if (direction > 0) {
@@ -58,6 +61,10 @@ esp_err_t motor_controller_init()
 
 void motor_controller_drive(MotorMotion motion)
 {
+    if (s_motion_initialized && motion == s_last_motion) {
+        return;
+    }
+
     switch (motion) {
     case MotorMotion::Forward:
         set_motors(1, 1, 1, 1);
@@ -94,9 +101,11 @@ void motor_controller_drive(MotorMotion motion)
         set_motors(0, 0, 0, 0);
         break;
     }
+    s_last_motion = motion;
+    s_motion_initialized = true;
 }
 
 void motor_controller_stop()
 {
-    set_motors(0, 0, 0, 0);
+    motor_controller_drive(MotorMotion::Stop);
 }

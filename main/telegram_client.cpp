@@ -1,5 +1,6 @@
 #include "telegram_client.h"
 
+#include <algorithm>
 #include <atomic>
 #include <cctype>
 #include <cmath>
@@ -17,7 +18,9 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
+#include "nvs.h"
 #include "robot_controller.h"
+#include "telegram_messages.h"
 #include "wifi_manager.h"
 
 namespace {
@@ -37,6 +40,34 @@ enum class SettingMode {
 
 QueueHandle_t s_outgoing_queue = nullptr;
 std::atomic_bool s_enabled{false};
+
+int64_t load_last_update_id()
+{
+    nvs_handle_t handle;
+    int64_t update_id = 0;
+    if (nvs_open("telegram", NVS_READONLY, &handle) == ESP_OK) {
+        nvs_get_i64(handle, "update_id", &update_id);
+        nvs_close(handle);
+    }
+    return update_id;
+}
+
+void save_last_update_id(int64_t update_id)
+{
+    nvs_handle_t handle;
+    if (nvs_open("telegram", NVS_READWRITE, &handle) != ESP_OK) {
+        ESP_LOGW(kTag, "Could not open NVS to save Telegram update ID");
+        return;
+    }
+    const esp_err_t result = nvs_set_i64(handle, "update_id", update_id);
+    if (result == ESP_OK) {
+        nvs_commit(handle);
+    } else {
+        ESP_LOGW(kTag, "Could not save Telegram update ID: %s",
+                 esp_err_to_name(result));
+    }
+    nvs_close(handle);
+}
 
 int64_t now_ms()
 {
@@ -152,12 +183,15 @@ void send_menu()
 {
     cJSON *root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "chat_id", app_config::kTelegramChatId);
-    cJSON_AddStringToObject(root, "text", "KYLIO ROBOT MENU");
+    cJSON_AddStringToObject(root, "text", telegram_messages::kMenuTitle);
     cJSON *reply_markup = cJSON_AddObjectToObject(root, "reply_markup");
     cJSON *keyboard = cJSON_AddArrayToObject(reply_markup, "keyboard");
-    add_button_row(keyboard, "/follow", "/obstacle");
-    add_button_row(keyboard, "/room", "/status");
-    add_button_row(keyboard, "/settings", "/stop");
+    add_button_row(keyboard, telegram_messages::kCommandFollow,
+                   telegram_messages::kCommandObstacle);
+    add_button_row(keyboard, telegram_messages::kCommandRoom,
+                   telegram_messages::kCommandStatus);
+    add_button_row(keyboard, telegram_messages::kCommandSettings,
+                   telegram_messages::kCommandStop);
     cJSON_AddBoolToObject(reply_markup, "resize_keyboard", true);
     post_json(root);
     cJSON_Delete(root);
@@ -167,11 +201,13 @@ void send_settings_menu()
 {
     cJSON *root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "chat_id", app_config::kTelegramChatId);
-    cJSON_AddStringToObject(root, "text", "ROBOT SETTINGS");
+    cJSON_AddStringToObject(root, "text",
+                            telegram_messages::kSettingsMenuTitle);
     cJSON *reply_markup = cJSON_AddObjectToObject(root, "reply_markup");
     cJSON *keyboard = cJSON_AddArrayToObject(reply_markup, "keyboard");
-    add_button_row(keyboard, "/setting_follow", "/setting_avoid");
-    add_button_row(keyboard, "/menu");
+    add_button_row(keyboard, telegram_messages::kCommandSettingFollow,
+                   telegram_messages::kCommandSettingAvoid);
+    add_button_row(keyboard, telegram_messages::kCommandMenu);
     cJSON_AddBoolToObject(reply_markup, "resize_keyboard", true);
     post_json(root);
     cJSON_Delete(root);
@@ -181,21 +217,9 @@ void send_status()
 {
     const RobotSnapshot snapshot = robot_controller_snapshot();
     char message[kMessageSize];
-    std::snprintf(
-        message, sizeof(message),
-        "KYLIO ROBOT STATUS\n\n"
-        "Mode: %s\nMotion: %s\nDistance: %s%.1f%s\n"
-        "HC-SR04: %s\nFollow distance: %.1f cm\n"
-        "Avoid distance: %.1f cm\nRoom intruder: %s\n"
-        "Wi-Fi RSSI: %d dBm\nIP: %s",
-        robot_mode_name(snapshot.mode), motor_motion_name(snapshot.motion),
-        snapshot.distance_valid ? "" : "ERROR (",
-        snapshot.distance_valid ? snapshot.distance_cm : 0.0F,
-        snapshot.distance_valid ? " cm" : ")",
-        snapshot.distance_valid ? "OK" : "ERROR",
-        snapshot.follow_distance_cm, snapshot.obstacle_distance_cm,
-        snapshot.room_intruder_detected ? "YES" : "NO",
-        wifi_manager_rssi(), wifi_manager_ip_address().c_str());
+    telegram_messages::format_status(message, sizeof(message), snapshot,
+                                     wifi_manager_rssi(),
+                                     wifi_manager_ip_address().c_str());
     send_message_now(message);
 }
 
@@ -229,12 +253,12 @@ void handle_command(const std::string &raw_command, SettingMode *setting_mode)
     const std::string command = trim(raw_command);
 
     if (*setting_mode != SettingMode::None) {
-        if (command == "/menu") {
+        if (command == telegram_messages::kCommandMenu) {
             *setting_mode = SettingMode::None;
             send_menu();
             return;
         }
-        if (command == "/settings") {
+        if (command == telegram_messages::kCommandSettings) {
             *setting_mode = SettingMode::None;
             send_settings_menu();
             return;
@@ -247,60 +271,53 @@ void handle_command(const std::string &raw_command, SettingMode *setting_mode)
                  ? robot_controller_set_follow_distance(distance)
                  : robot_controller_set_obstacle_distance(distance));
         if (!updated) {
-            send_message_now(
-                "Khoang cach phai la mot so tu 10 den 200 cm. "
-                "Nhap lai hoac dung /menu de thoat.");
+            send_message_now(telegram_messages::kInvalidDistance);
             return;
         }
 
         char confirmation[96];
-        std::snprintf(confirmation, sizeof(confirmation),
-                      "%s distance = %.1f cm",
-                      *setting_mode == SettingMode::FollowDistance
-                          ? "Follow"
-                          : "Avoid",
-                      distance);
+        telegram_messages::format_distance_confirmation(
+            confirmation, sizeof(confirmation),
+            *setting_mode == SettingMode::FollowDistance, distance);
         *setting_mode = SettingMode::None;
         send_message_now(confirmation);
         send_settings_menu();
         return;
     }
 
-    if (command == "/menu" || command == "/start") {
+    if (command == telegram_messages::kCommandMenu || command == "/start") {
         send_menu();
-    } else if (command == "/status") {
+    } else if (command == telegram_messages::kCommandStatus) {
         send_status();
-    } else if (command == "/settings") {
+    } else if (command == telegram_messages::kCommandSettings) {
         send_settings_menu();
-    } else if (command == "/setting_follow") {
+    } else if (command == telegram_messages::kCommandSettingFollow) {
         *setting_mode = SettingMode::FollowDistance;
         const RobotSnapshot snapshot = robot_controller_snapshot();
         char prompt[128];
-        std::snprintf(prompt, sizeof(prompt),
-                      "Nhap Follow distance (10-200 cm). Current: %.1f cm",
-                      snapshot.follow_distance_cm);
+        telegram_messages::format_follow_distance_prompt(
+            prompt, sizeof(prompt), snapshot.follow_distance_cm);
         send_message_now(prompt);
-    } else if (command == "/setting_avoid") {
+    } else if (command == telegram_messages::kCommandSettingAvoid) {
         *setting_mode = SettingMode::ObstacleDistance;
         const RobotSnapshot snapshot = robot_controller_snapshot();
         char prompt[128];
-        std::snprintf(prompt, sizeof(prompt),
-                      "Nhap Avoid distance (10-200 cm). Current: %.1f cm",
-                      snapshot.obstacle_distance_cm);
+        telegram_messages::format_avoid_distance_prompt(
+            prompt, sizeof(prompt), snapshot.obstacle_distance_cm);
         send_message_now(prompt);
-    } else if (command == "/stop") {
+    } else if (command == telegram_messages::kCommandStop) {
         robot_controller_emergency_stop();
-        send_message_now("Robot da dung. Mode da chuyen ve Manual.");
-    } else if (command == "/follow") {
-        send_message_now("Follow Mode duoc bat/tat tren Web Control.");
-    } else if (command == "/obstacle") {
-        send_message_now("Obstacle Mode duoc bat/tat tren Web Control.");
-    } else if (command == "/room") {
-        send_message_now("Room Monitor duoc bat/tat tren Web Control.");
+        send_message_now(telegram_messages::kStopped);
+    } else if (command == telegram_messages::kCommandFollow) {
+        send_message_now(telegram_messages::kFollowWebControl);
+    } else if (command == telegram_messages::kCommandObstacle) {
+        send_message_now(telegram_messages::kObstacleWebControl);
+    } else if (command == telegram_messages::kCommandRoom) {
+        send_message_now(telegram_messages::kRoomWebControl);
     } else if (command == "/help") {
         send_menu();
     } else {
-        send_message_now("Lenh khong hop le. Dung /menu.");
+        send_message_now(telegram_messages::kUnknownCommand);
     }
 }
 
@@ -368,31 +385,47 @@ bool poll_updates(int64_t *last_update_id, SettingMode *setting_mode)
 void telegram_task(void *)
 {
     int64_t last_poll_ms = 0;
-    int64_t last_update_id = 0;
-    bool startup_message_sent = false;
+    int64_t last_update_id = load_last_update_id();
+    bool startup_message_enqueued = false;
     SettingMode setting_mode = SettingMode::None;
+    int64_t next_send_attempt_ms = 0;
+    uint32_t send_retry_delay_ms = app_config::kTelegramRetryInitialMs;
 
     while (true) {
         if (telegram_client_is_configured() && wifi_manager_is_connected()) {
-            if (!startup_message_sent) {
-                const std::string message =
-                    "Kylio da khoi dong. Web Control: http://" +
-                    wifi_manager_ip_address();
-                startup_message_sent = send_message_now(message.c_str());
+            if (!startup_message_enqueued) {
+                char message[kMessageSize];
+                telegram_messages::format_startup(
+                    message, sizeof(message), wifi_manager_ip_address().c_str());
+                startup_message_enqueued = telegram_client_enqueue_message(
+                    message);
             }
 
             OutgoingMessage outgoing = {};
             if (s_outgoing_queue != nullptr &&
                 xQueuePeek(s_outgoing_queue, &outgoing, 0) == pdTRUE &&
-                send_message_now(outgoing.text)) {
-                xQueueReceive(s_outgoing_queue, &outgoing, 0);
+                now_ms() >= next_send_attempt_ms) {
+                if (send_message_now(outgoing.text)) {
+                    xQueueReceive(s_outgoing_queue, &outgoing, 0);
+                    send_retry_delay_ms = app_config::kTelegramRetryInitialMs;
+                    next_send_attempt_ms = 0;
+                } else {
+                    next_send_attempt_ms = now_ms() + send_retry_delay_ms;
+                    send_retry_delay_ms = std::min<uint32_t>(
+                        send_retry_delay_ms * 2U,
+                        app_config::kTelegramRetryMaxMs);
+                }
             }
 
             const int64_t now = now_ms();
             if (s_enabled.load() &&
                 now - last_poll_ms >= app_config::kTelegramPollMs) {
                 last_poll_ms = now;
-                poll_updates(&last_update_id, &setting_mode);
+                const int64_t update_id_before_poll = last_update_id;
+                if (poll_updates(&last_update_id, &setting_mode) &&
+                    last_update_id != update_id_before_poll) {
+                    save_last_update_id(last_update_id);
+                }
             }
         }
         vTaskDelay(pdMS_TO_TICKS(100));
@@ -441,5 +474,9 @@ bool telegram_client_enqueue_message(const char *message)
     }
     OutgoingMessage outgoing = {};
     std::snprintf(outgoing.text, sizeof(outgoing.text), "%s", message);
-    return xQueueSend(s_outgoing_queue, &outgoing, 0) == pdTRUE;
+    if (xQueueSend(s_outgoing_queue, &outgoing, 0) == pdTRUE) {
+        return true;
+    }
+    ESP_LOGW(kTag, "Telegram outgoing queue is full; message dropped");
+    return false;
 }

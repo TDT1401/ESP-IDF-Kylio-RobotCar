@@ -60,6 +60,8 @@ inline constexpr uint32_t kObstacleStopMs = 1000;
 inline constexpr uint32_t kObstacleBackMs = 1500;
 inline constexpr uint32_t kObstacleTurnMs = 700;
 inline constexpr uint32_t kRoomCalibrationMs = 500;
+inline constexpr uint32_t kRoomCalibrationTimeoutMs = 3000;
+inline constexpr uint32_t kRoomBaselineSamples = 5;
 inline constexpr uint32_t kRoomCheckMs = 300;
 inline constexpr uint32_t kRoomClearMs = 3000;
 inline constexpr float kRoomChangeCm = 100.0F;
@@ -68,10 +70,14 @@ inline constexpr WifiCredential kWifiNetworks[] = KYLIO_WIFI_NETWORKS;
 inline constexpr std::size_t kWifiNetworkCount =
     sizeof(kWifiNetworks) / sizeof(kWifiNetworks[0]);
 inline constexpr uint32_t kWifiRetriesPerNetwork = 3;
+inline constexpr uint32_t kWifiReconnectInitialMs = 1000;
+inline constexpr uint32_t kWifiReconnectMaxMs = 10000;
 
 inline constexpr const char *kTelegramBotToken = KYLIO_TELEGRAM_BOT_TOKEN;
 inline constexpr const char *kTelegramChatId = KYLIO_TELEGRAM_CHAT_ID;
 inline constexpr uint32_t kTelegramPollMs = 1000;
+inline constexpr uint32_t kTelegramRetryInitialMs = 1000;
+inline constexpr uint32_t kTelegramRetryMaxMs = 30000;
 
 inline constexpr const char *kWebUsername = KYLIO_WEB_USERNAME;
 inline constexpr const char *kWebPassword = KYLIO_WEB_PASSWORD;

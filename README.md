@@ -58,7 +58,7 @@ Its resolved version is recorded in `dependencies.lock`.
 Replace `COM5` with the serial port used by the board:
 
 ```powershell
-idf.py -p COM5 flash monitor
+idf.py -p COM6 flash monitor
 ```
 
 Exit the monitor with `Ctrl+]`. After the station connects, the log prints the

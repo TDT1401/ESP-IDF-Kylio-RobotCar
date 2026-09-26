@@ -1,5 +1,6 @@
 #include "wifi_manager.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 
@@ -7,6 +8,7 @@
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_netif.h"
+#include "esp_timer.h"
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 
@@ -16,9 +18,11 @@ constexpr const char *kTag = "wifi";
 
 std::size_t s_network_index = 0;
 uint32_t s_retry_count = 0;
+uint32_t s_reconnect_attempt = 0;
 bool s_connected = false;
 char s_ip_address[16] = "0.0.0.0";
 portMUX_TYPE s_state_lock = portMUX_INITIALIZER_UNLOCKED;
+esp_timer_handle_t s_reconnect_timer = nullptr;
 
 bool network_is_configured(std::size_t index)
 {
@@ -83,41 +87,86 @@ esp_err_t connect_current_network()
     return esp_wifi_connect();
 }
 
+uint32_t reconnect_delay_ms()
+{
+    uint32_t delay = app_config::kWifiReconnectInitialMs;
+    for (uint32_t attempt = 0; attempt < s_reconnect_attempt &&
+                               delay < app_config::kWifiReconnectMaxMs;
+         ++attempt) {
+        delay = std::min<uint32_t>(delay * 2U,
+                                   app_config::kWifiReconnectMaxMs);
+    }
+    return delay;
+}
+
+void reconnect_timer_callback(void *)
+{
+    const esp_err_t result = connect_current_network();
+    if (result != ESP_OK) {
+        ESP_LOGW(kTag, "Wi-Fi connect attempt failed: %s", esp_err_to_name(result));
+    }
+}
+
+void schedule_reconnect(uint32_t delay_ms)
+{
+    if (s_reconnect_timer == nullptr) {
+        return;
+    }
+    if (esp_timer_is_active(s_reconnect_timer)) {
+        esp_timer_stop(s_reconnect_timer);
+    }
+    const esp_err_t result = esp_timer_start_once(
+        s_reconnect_timer, static_cast<uint64_t>(delay_ms) * 1000ULL);
+    if (result != ESP_OK) {
+        ESP_LOGW(kTag, "Could not schedule Wi-Fi reconnect: %s",
+                 esp_err_to_name(result));
+    }
+}
+
 void event_handler(void *, esp_event_base_t event_base, int32_t event_id,
                    void *event_data)
 {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
-        ESP_ERROR_CHECK_WITHOUT_ABORT(connect_current_network());
+        schedule_reconnect(1);
         return;
     }
 
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
         const auto *event = static_cast<wifi_event_sta_disconnected_t *>(event_data);
+        static constexpr char kNoIp[] = "0.0.0.0";
         portENTER_CRITICAL(&s_state_lock);
         s_connected = false;
-        std::snprintf(s_ip_address, sizeof(s_ip_address), "0.0.0.0");
+        std::memcpy(s_ip_address, kNoIp, sizeof(kNoIp));
         portEXIT_CRITICAL(&s_state_lock);
 
         if (++s_retry_count >= app_config::kWifiRetriesPerNetwork) {
             s_retry_count = 0;
             select_next_network();
         }
-        ESP_LOGW(kTag, "Wi-Fi disconnected (reason=%u); reconnecting",
-                 static_cast<unsigned>(event->reason));
-        ESP_ERROR_CHECK_WITHOUT_ABORT(connect_current_network());
+        const uint32_t delay_ms = reconnect_delay_ms();
+        s_reconnect_attempt = std::min<uint32_t>(
+            s_reconnect_attempt + 1U, 4U);
+        ESP_LOGW(kTag, "Wi-Fi disconnected (reason=%u); retrying in %u ms",
+                 static_cast<unsigned>(event->reason),
+                 static_cast<unsigned>(delay_ms));
+        schedule_reconnect(delay_ms);
         return;
     }
 
     if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         const auto *event = static_cast<ip_event_got_ip_t *>(event_data);
-        char address[16];
+        char address[16] = {};
         std::snprintf(address, sizeof(address), IPSTR, IP2STR(&event->ip_info.ip));
 
         portENTER_CRITICAL(&s_state_lock);
         s_connected = true;
-        std::snprintf(s_ip_address, sizeof(s_ip_address), "%s", address);
+        std::memcpy(s_ip_address, address, sizeof(s_ip_address));
         portEXIT_CRITICAL(&s_state_lock);
         s_retry_count = 0;
+        s_reconnect_attempt = 0;
+        if (s_reconnect_timer != nullptr && esp_timer_is_active(s_reconnect_timer)) {
+            esp_timer_stop(s_reconnect_timer);
+        }
         ESP_LOGI(kTag, "Connected; open http://%s", address);
     }
 }
@@ -145,6 +194,18 @@ esp_err_t wifi_manager_start()
 
     wifi_init_config_t init_config = WIFI_INIT_CONFIG_DEFAULT();
     result = esp_wifi_init(&init_config);
+    if (result != ESP_OK) {
+        return result;
+    }
+
+    const esp_timer_create_args_t reconnect_timer_args = {
+        .callback = &reconnect_timer_callback,
+        .arg = nullptr,
+        .dispatch_method = ESP_TIMER_TASK,
+        .name = "wifi_retry",
+        .skip_unhandled_events = false,
+    };
+    result = esp_timer_create(&reconnect_timer_args, &s_reconnect_timer);
     if (result != ESP_OK) {
         return result;
     }

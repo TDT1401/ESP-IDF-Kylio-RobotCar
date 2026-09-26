@@ -1,5 +1,6 @@
 #include "robot_controller.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 
@@ -10,6 +11,7 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "telegram_client.h"
+#include "telegram_messages.h"
 #include "ultrasonic.h"
 
 namespace {
@@ -47,12 +49,17 @@ uint64_t now_ms()
     return static_cast<uint64_t>(esp_timer_get_time() / 1000);
 }
 
-void apply_motion(MotorMotion motion)
+bool apply_motion(MotorMotion motion, uint32_t expected_revision)
 {
-    motor_controller_drive(motion);
     xSemaphoreTake(s_mutex, portMAX_DELAY);
+    if (s_state.revision != expected_revision) {
+        xSemaphoreGive(s_mutex);
+        return false;
+    }
+    motor_controller_drive(motion);
     s_state.applied_motion = motion;
     xSemaphoreGive(s_mutex);
+    return true;
 }
 
 float measure_and_publish()
@@ -71,11 +78,40 @@ void reset_room_state_locked()
     s_state.room_baseline_cm = -1.0F;
 }
 
-void set_manual_front_brake_active(bool active)
+float filter_distance_sample(float distance, float samples[3],
+                             uint32_t *sample_count, uint32_t *next_index)
+{
+    if (distance <= 0.0F) {
+        return -1.0F;
+    }
+    samples[*next_index] = distance;
+    *next_index = (*next_index + 1) % 3;
+    *sample_count = std::min<uint32_t>(*sample_count + 1U, 3U);
+
+    float sorted[3] = {};
+    for (uint32_t index = 0; index < *sample_count; ++index) {
+        sorted[index] = samples[index];
+    }
+    std::sort(sorted, sorted + *sample_count);
+    if (*sample_count == 1) {
+        return sorted[0];
+    }
+    if (*sample_count == 2) {
+        return (sorted[0] + sorted[1]) / 2.0F;
+    }
+    return sorted[1];
+}
+
+bool set_manual_front_brake_active(bool active, uint32_t expected_revision)
 {
     xSemaphoreTake(s_mutex, portMAX_DELAY);
+    if (s_state.revision != expected_revision) {
+        xSemaphoreGive(s_mutex);
+        return false;
+    }
     s_state.manual_front_brake_active = active;
     xSemaphoreGive(s_mutex);
+    return true;
 }
 
 void controller_task(void *)
@@ -89,6 +125,14 @@ void controller_task(void *)
     uint64_t room_clear_started_ms = 0;
     bool manual_front_brake_active = false;
     uint32_t manual_low_distance_samples = 0;
+    float follow_samples[3] = {};
+    uint32_t follow_sample_count = 0;
+    uint32_t follow_next_index = 0;
+    float room_samples[3] = {};
+    uint32_t room_sample_count = 0;
+    uint32_t room_next_index = 0;
+    float room_baseline_sum = 0.0F;
+    uint32_t room_baseline_samples = 0;
 
     while (true) {
         const uint64_t now = now_ms();
@@ -111,8 +155,14 @@ void controller_task(void *)
             room_clear_started_ms = 0;
             manual_front_brake_active = false;
             manual_low_distance_samples = 0;
-            set_manual_front_brake_active(false);
-            apply_motion(MotorMotion::Stop);
+            follow_sample_count = 0;
+            follow_next_index = 0;
+            room_sample_count = 0;
+            room_next_index = 0;
+            room_baseline_sum = 0.0F;
+            room_baseline_samples = 0;
+            set_manual_front_brake_active(false, revision);
+            apply_motion(MotorMotion::Stop, revision);
         }
 
         if (mode == RobotMode::Manual) {
@@ -127,13 +177,13 @@ void controller_task(void *)
                 command = MotorMotion::Stop;
                 manual_front_brake_active = false;
                 manual_low_distance_samples = 0;
-                set_manual_front_brake_active(false);
+                set_manual_front_brake_active(false, revision);
             }
 
             if (command != MotorMotion::Forward && manual_front_brake_active) {
                 manual_front_brake_active = false;
                 manual_low_distance_samples = 0;
-                set_manual_front_brake_active(false);
+                set_manual_front_brake_active(false, revision);
             }
 
             const uint32_t measurement_interval =
@@ -166,13 +216,13 @@ void controller_task(void *)
                     manual_front_brake_active = false;
                     manual_low_distance_samples = 0;
                 }
-                set_manual_front_brake_active(manual_front_brake_active);
+                set_manual_front_brake_active(manual_front_brake_active, revision);
             }
 
             if (command == MotorMotion::Forward && manual_front_brake_active) {
-                apply_motion(MotorMotion::Stop);
+                apply_motion(MotorMotion::Stop, revision);
             } else {
-                apply_motion(command);
+                apply_motion(command, revision);
             }
         } else if (mode == RobotMode::Obstacle) {
             switch (obstacle_phase) {
@@ -183,42 +233,43 @@ void controller_task(void *)
                     const float distance = measure_and_publish();
                     last_measurement_ms = now;
                     if (distance <= 0.0F) {
-                        apply_motion(MotorMotion::Stop);
+                        apply_motion(MotorMotion::Stop, revision);
                     } else if (distance < obstacle_distance) {
-                        apply_motion(MotorMotion::Stop);
+                        apply_motion(MotorMotion::Stop, revision);
                         obstacle_phase = ObstaclePhase::StopBeforeBack;
                         phase_started_ms = now;
                     } else {
-                        apply_motion(MotorMotion::Forward);
+                        apply_motion(MotorMotion::Forward, revision);
                     }
                 }
                 break;
             }
             case ObstaclePhase::StopBeforeBack:
-                apply_motion(MotorMotion::Stop);
+                apply_motion(MotorMotion::Stop, revision);
                 if (now - phase_started_ms >= app_config::kObstacleStopMs) {
                     obstacle_phase = ObstaclePhase::Backward;
                     phase_started_ms = now;
                 }
                 break;
             case ObstaclePhase::Backward:
-                apply_motion(MotorMotion::Backward);
+                apply_motion(MotorMotion::Backward, revision);
                 if (now - phase_started_ms >= app_config::kObstacleBackMs) {
                     obstacle_phase = ObstaclePhase::Turn;
                     phase_started_ms = now;
                 }
                 break;
             case ObstaclePhase::Turn:
-                apply_motion(turn_left_next ? MotorMotion::Left
-                                            : MotorMotion::Right);
+                apply_motion(turn_left_next ? MotorMotion::RotateLeft
+                                            : MotorMotion::RotateRight,
+                             revision);
                 if (now - phase_started_ms >= app_config::kObstacleTurnMs) {
-                    apply_motion(MotorMotion::Stop);
+                    apply_motion(MotorMotion::Stop, revision);
                     obstacle_phase = ObstaclePhase::Settle;
                     phase_started_ms = now;
                 }
                 break;
             case ObstaclePhase::Settle:
-                apply_motion(MotorMotion::Stop);
+                apply_motion(MotorMotion::Stop, revision);
                 if (now - phase_started_ms >= app_config::kObstacleStopMs) {
                     turn_left_next = !turn_left_next;
                     obstacle_phase = ObstaclePhase::Forward;
@@ -232,20 +283,23 @@ void controller_task(void *)
                     app_config::kUltrasonicMinIntervalMs) {
                 const float distance = measure_and_publish();
                 last_measurement_ms = now;
-                if (distance <= 0.0F) {
-                    apply_motion(MotorMotion::Stop);
-                } else if (distance < follow_distance) {
-                    apply_motion(MotorMotion::Backward);
-                } else if (distance <= follow_distance + 5.0F) {
-                    apply_motion(MotorMotion::Stop);
-                } else if (distance <= follow_distance + 25.0F) {
-                    apply_motion(MotorMotion::Forward);
+                const float filtered_distance = filter_distance_sample(
+                    distance, follow_samples, &follow_sample_count,
+                    &follow_next_index);
+                if (filtered_distance <= 0.0F) {
+                    apply_motion(MotorMotion::Stop, revision);
+                } else if (filtered_distance < follow_distance) {
+                    apply_motion(MotorMotion::Backward, revision);
+                } else if (filtered_distance <= follow_distance + 5.0F) {
+                    apply_motion(MotorMotion::Stop, revision);
+                } else if (filtered_distance <= follow_distance + 25.0F) {
+                    apply_motion(MotorMotion::Forward, revision);
                 } else {
-                    apply_motion(MotorMotion::Stop);
+                    apply_motion(MotorMotion::Stop, revision);
                 }
             }
         } else if (mode == RobotMode::RoomMonitor) {
-            apply_motion(MotorMotion::Stop);
+            apply_motion(MotorMotion::Stop, revision);
 
             xSemaphoreTake(s_mutex, portMAX_DELAY);
             const bool calibrating = s_state.room_calibrating;
@@ -255,37 +309,52 @@ void controller_task(void *)
 
             if (calibrating &&
                 now - mode_started_ms >= app_config::kRoomCalibrationMs) {
-                const float distance = measure_and_publish();
-                last_measurement_ms = now;
-                xSemaphoreTake(s_mutex, portMAX_DELAY);
-                if (distance > 0.0F) {
-                    s_state.room_baseline_cm = distance;
-                    s_state.room_calibrating = false;
-                } else {
-                    s_state.mode = RobotMode::Manual;
-                    s_state.command = MotorMotion::Stop;
-                    reset_room_state_locked();
-                    ++s_state.revision;
-                }
-                xSemaphoreGive(s_mutex);
-
-                if (distance > 0.0F) {
-                    char message[160];
-                    std::snprintf(message, sizeof(message),
-                                  "Room Monitor ON\nKhoang cach ban dau: %.1f cm",
-                                  distance);
-                    telegram_client_enqueue_message(message);
-                } else {
+                if (now - mode_started_ms >=
+                    app_config::kRoomCalibrationTimeoutMs) {
+                    xSemaphoreTake(s_mutex, portMAX_DELAY);
+                    if (s_state.revision == revision) {
+                        s_state.mode = RobotMode::Manual;
+                        s_state.command = MotorMotion::Stop;
+                        reset_room_state_locked();
+                        ++s_state.revision;
+                    }
+                    xSemaphoreGive(s_mutex);
                     telegram_client_enqueue_message(
-                        "Khong the bat Room Monitor: cam bien sieu am khong phan hoi.");
+                        telegram_messages::kRoomMonitorUnavailable);
+                } else if (last_measurement_ms == 0 ||
+                           now - last_measurement_ms >=
+                               app_config::kUltrasonicMinIntervalMs) {
+                    const float distance = measure_and_publish();
+                    last_measurement_ms = now;
+                    if (distance > 0.0F) {
+                        room_baseline_sum += distance;
+                        ++room_baseline_samples;
+                    }
+                    if (room_baseline_samples >=
+                        app_config::kRoomBaselineSamples) {
+                        const float calibrated_baseline =
+                            room_baseline_sum / room_baseline_samples;
+                        xSemaphoreTake(s_mutex, portMAX_DELAY);
+                        if (s_state.revision == revision) {
+                            s_state.room_baseline_cm = calibrated_baseline;
+                            s_state.room_calibrating = false;
+                        }
+                        xSemaphoreGive(s_mutex);
+                        char message[160];
+                        telegram_messages::format_room_monitor_started(
+                            message, sizeof(message), calibrated_baseline);
+                        telegram_client_enqueue_message(message);
+                    }
                 }
             } else if (!calibrating &&
                        (last_measurement_ms == 0 ||
                         now - last_measurement_ms >= app_config::kRoomCheckMs)) {
                 const float distance = measure_and_publish();
                 last_measurement_ms = now;
-                if (distance > 0.0F) {
-                    const float change = baseline - distance;
+                const float filtered_distance = filter_distance_sample(
+                    distance, room_samples, &room_sample_count, &room_next_index);
+                if (filtered_distance > 0.0F) {
+                    const float change = baseline - filtered_distance;
                     if (change > app_config::kRoomChangeCm) {
                         room_clear_started_ms = 0;
                         if (!intruder_detected) {
@@ -293,10 +362,8 @@ void controller_task(void *)
                             s_state.room_intruder_detected = true;
                             xSemaphoreGive(s_mutex);
                             char message[192];
-                            std::snprintf(message, sizeof(message),
-                                          "CANH BAO! Phat hien thay doi trong phong. "
-                                          "Khoang cach: %.1f cm",
-                                          distance);
+                            telegram_messages::format_room_alert(
+                                message, sizeof(message), filtered_distance);
                             telegram_client_enqueue_message(message);
                         }
                     } else if (intruder_detected) {
@@ -346,11 +413,11 @@ void robot_controller_set_mode(RobotMode mode, bool enabled)
         s_state.room_calibrating = true;
     }
     ++s_state.revision;
-    xSemaphoreGive(s_mutex);
-
     motor_controller_stop();
+    s_state.applied_motion = MotorMotion::Stop;
+    xSemaphoreGive(s_mutex);
     if (stopped_room) {
-        telegram_client_enqueue_message("Room Monitor OFF");
+        telegram_client_enqueue_message(telegram_messages::kRoomMonitorOff);
     }
 }
 
@@ -379,8 +446,9 @@ void robot_controller_emergency_stop()
     reset_room_state_locked();
     s_state.manual_front_brake_active = false;
     ++s_state.revision;
-    xSemaphoreGive(s_mutex);
     motor_controller_stop();
+    s_state.applied_motion = MotorMotion::Stop;
+    xSemaphoreGive(s_mutex);
 }
 
 bool robot_controller_set_follow_distance(float distance_cm)
