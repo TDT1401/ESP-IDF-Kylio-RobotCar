@@ -23,8 +23,9 @@ struct ControllerState {
     uint64_t command_updated_ms = 0;
     uint32_t revision = 0;
     float distance_cm = -1.0F;
-    float obstacle_distance_cm = 30.0F;
-    float follow_distance_cm = 30.0F;
+    float obstacle_distance_cm = 20.0F;
+    float follow_distance_cm = 20.0F;
+    bool manual_front_brake_active = false;
     bool room_calibrating = false;
     bool room_intruder_detected = false;
     float room_baseline_cm = -1.0F;
@@ -70,6 +71,13 @@ void reset_room_state_locked()
     s_state.room_baseline_cm = -1.0F;
 }
 
+void set_manual_front_brake_active(bool active)
+{
+    xSemaphoreTake(s_mutex, portMAX_DELAY);
+    s_state.manual_front_brake_active = active;
+    xSemaphoreGive(s_mutex);
+}
+
 void controller_task(void *)
 {
     uint32_t observed_revision = UINT32_MAX;
@@ -79,6 +87,8 @@ void controller_task(void *)
     uint64_t mode_started_ms = phase_started_ms;
     uint64_t last_measurement_ms = 0;
     uint64_t room_clear_started_ms = 0;
+    bool manual_front_brake_active = false;
+    uint32_t manual_low_distance_samples = 0;
 
     while (true) {
         const uint64_t now = now_ms();
@@ -99,6 +109,9 @@ void controller_task(void *)
             mode_started_ms = now;
             last_measurement_ms = 0;
             room_clear_started_ms = 0;
+            manual_front_brake_active = false;
+            manual_low_distance_samples = 0;
+            set_manual_front_brake_active(false);
             apply_motion(MotorMotion::Stop);
         }
 
@@ -112,29 +125,55 @@ void controller_task(void *)
                 }
                 xSemaphoreGive(s_mutex);
                 command = MotorMotion::Stop;
+                manual_front_brake_active = false;
+                manual_low_distance_samples = 0;
+                set_manual_front_brake_active(false);
             }
 
-            if (command == MotorMotion::Forward) {
-                if (last_measurement_ms == 0 ||
-                    now - last_measurement_ms >=
-                        app_config::kUltrasonicMinIntervalMs) {
-                    const float distance = measure_and_publish();
-                    last_measurement_ms = now;
-                    if (distance <= 0.0F ||
-                        distance < app_config::kManualStopDistanceCm) {
-                        command = MotorMotion::Stop;
-                    }
-                } else {
-                    xSemaphoreTake(s_mutex, portMAX_DELAY);
-                    const float distance = s_state.distance_cm;
-                    xSemaphoreGive(s_mutex);
-                    if (distance <= 0.0F ||
-                        distance < app_config::kManualStopDistanceCm) {
-                        command = MotorMotion::Stop;
-                    }
-                }
+            if (command != MotorMotion::Forward && manual_front_brake_active) {
+                manual_front_brake_active = false;
+                manual_low_distance_samples = 0;
+                set_manual_front_brake_active(false);
             }
-            apply_motion(command);
+
+            const uint32_t measurement_interval =
+                command == MotorMotion::Forward
+                    ? app_config::kUltrasonicMinIntervalMs
+                    : app_config::kManualDistanceUpdateMs;
+
+            if (last_measurement_ms == 0 ||
+                now - last_measurement_ms >= measurement_interval) {
+                const float distance = measure_and_publish();
+                last_measurement_ms = now;
+
+                if (command == MotorMotion::Forward && distance > 0.0F) {
+                    if (manual_front_brake_active) {
+                        if (distance >= app_config::kManualFrontBrakeReleaseCm) {
+                            manual_front_brake_active = false;
+                            manual_low_distance_samples = 0;
+                        }
+                    } else if (distance < app_config::kManualFrontBrakeDistanceCm) {
+                        ++manual_low_distance_samples;
+                        if (manual_low_distance_samples >=
+                            app_config::kManualFrontBrakeSamples) {
+                            manual_front_brake_active = true;
+                            manual_low_distance_samples = 0;
+                        }
+                    } else {
+                        manual_low_distance_samples = 0;
+                    }
+                } else if (command != MotorMotion::Forward) {
+                    manual_front_brake_active = false;
+                    manual_low_distance_samples = 0;
+                }
+                set_manual_front_brake_active(manual_front_brake_active);
+            }
+
+            if (command == MotorMotion::Forward && manual_front_brake_active) {
+                apply_motion(MotorMotion::Stop);
+            } else {
+                apply_motion(command);
+            }
         } else if (mode == RobotMode::Obstacle) {
             switch (obstacle_phase) {
             case ObstaclePhase::Forward: {
@@ -302,6 +341,7 @@ void robot_controller_set_mode(RobotMode mode, bool enabled)
     s_state.mode = enabled ? mode : RobotMode::Manual;
     s_state.command = MotorMotion::Stop;
     reset_room_state_locked();
+    s_state.manual_front_brake_active = false;
     if (enabled && mode == RobotMode::RoomMonitor) {
         s_state.room_calibrating = true;
     }
@@ -337,6 +377,7 @@ void robot_controller_emergency_stop()
     s_state.mode = RobotMode::Manual;
     s_state.command = MotorMotion::Stop;
     reset_room_state_locked();
+    s_state.manual_front_brake_active = false;
     ++s_state.revision;
     xSemaphoreGive(s_mutex);
     motor_controller_stop();
@@ -377,6 +418,7 @@ RobotSnapshot robot_controller_snapshot()
                           s_state.distance_cm <= 400.0F,
         .obstacle_distance_cm = s_state.obstacle_distance_cm,
         .follow_distance_cm = s_state.follow_distance_cm,
+        .manual_front_brake_active = s_state.manual_front_brake_active,
         .room_calibrating = s_state.room_calibrating,
         .room_intruder_detected = s_state.room_intruder_detected,
         .room_baseline_cm = s_state.room_baseline_cm,

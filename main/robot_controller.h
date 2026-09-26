@@ -19,6 +19,7 @@ struct RobotSnapshot {
     bool distance_valid;
     float obstacle_distance_cm;
     float follow_distance_cm;
+    bool manual_front_brake_active;
     bool room_calibrating;
     bool room_intruder_detected;
     float room_baseline_cm;

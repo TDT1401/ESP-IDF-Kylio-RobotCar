@@ -68,8 +68,11 @@ the username and password configured in `secrets.local.h`.
 ## Safety behavior
 
 - All motor GPIOs are driven LOW during startup.
-- Manual controls send a heartbeat while held; the firmware stops the motors
-  if that heartbeat disappears for 750 ms.
-- A missing/invalid ultrasonic reading stops forward, follow, and automatic
-  obstacle motion.
+- Manual controls send a heartbeat every 100 ms while held; the firmware stops
+  the motors if that heartbeat disappears for 350 ms.
+- HC-SR04 timeouts do not interrupt manual forward motion. The front brake
+  stops manual forward only after three valid measurements below 25 cm;
+  it releases after a valid reading of at least 32 cm.
+- A missing/invalid ultrasonic reading stops follow and automatic obstacle
+  motion.
 - Changing mode or enabling/disabling Telegram immediately stops the motors.

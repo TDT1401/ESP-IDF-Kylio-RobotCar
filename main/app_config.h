@@ -51,8 +51,11 @@ inline constexpr uint32_t kUltrasonicTimeoutUs = 30000;
 inline constexpr uint32_t kUltrasonicMinIntervalMs = 70;
 
 inline constexpr uint32_t kControllerPeriodMs = 20;
-inline constexpr uint32_t kManualCommandTimeoutMs = 750;
-inline constexpr float kManualStopDistanceCm = 55.0F;
+inline constexpr uint32_t kManualCommandTimeoutMs = 350;
+inline constexpr uint32_t kManualDistanceUpdateMs = 250;
+inline constexpr float kManualFrontBrakeDistanceCm = 25.0F;
+inline constexpr float kManualFrontBrakeReleaseCm = 32.0F;
+inline constexpr uint32_t kManualFrontBrakeSamples = 3;
 inline constexpr uint32_t kObstacleStopMs = 1000;
 inline constexpr uint32_t kObstacleBackMs = 1500;
 inline constexpr uint32_t kObstacleTurnMs = 700;

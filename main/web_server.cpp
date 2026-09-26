@@ -1,5 +1,8 @@
 #include "web_server.h"
 
+#include <cerrno>
+#include <cstdint>
+#include <cstdlib>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -7,6 +10,7 @@
 #include "app_config.h"
 #include "esp_http_server.h"
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
 #include "mbedtls/base64.h"
 #include "robot_controller.h"
 #include "telegram_client.h"
@@ -18,6 +22,8 @@ namespace {
 constexpr const char *kTag = "web";
 httpd_handle_t s_server = nullptr;
 std::string s_expected_authorization;
+uint64_t s_last_command_sequence = 0;
+portMUX_TYPE s_command_sequence_lock = portMUX_INITIALIZER_UNLOCKED;
 
 bool constant_time_equal(const char *left, const std::string &right)
 {
@@ -78,6 +84,24 @@ bool query_value(httpd_req_t *request, const char *key, char *value,
            httpd_query_key_value(query, key, value, value_size) == ESP_OK;
 }
 
+bool accept_command_sequence(const char *value)
+{
+    errno = 0;
+    char *end = nullptr;
+    const uint64_t sequence = std::strtoull(value, &end, 10);
+    if (errno != 0 || end == value || *end != '\0' || sequence == 0) {
+        return false;
+    }
+
+    portENTER_CRITICAL(&s_command_sequence_lock);
+    const bool accepted = sequence > s_last_command_sequence;
+    if (accepted) {
+        s_last_command_sequence = sequence;
+    }
+    portEXIT_CRITICAL(&s_command_sequence_lock);
+    return accepted;
+}
+
 esp_err_t send_text(httpd_req_t *request, const char *status,
                     const char *message)
 {
@@ -120,9 +144,11 @@ esp_err_t command_handler(httpd_req_t *request)
 
     char direction[8] = {};
     char state_value[8] = {};
+    char sequence[24] = {};
     if (!query_value(request, "dir", direction, sizeof(direction)) ||
-        !query_value(request, "state", state_value, sizeof(state_value))) {
-        return send_text(request, "400 Bad Request", "Missing dir or state");
+        !query_value(request, "state", state_value, sizeof(state_value)) ||
+        !query_value(request, "seq", sequence, sizeof(sequence))) {
+        return send_text(request, "400 Bad Request", "Missing dir, state, or seq");
     }
 
     bool valid = false;
@@ -130,6 +156,9 @@ esp_err_t command_handler(httpd_req_t *request)
     if (!valid || (std::strcmp(state_value, "0") != 0 &&
                    std::strcmp(state_value, "1") != 0)) {
         return send_text(request, "400 Bad Request", "Invalid command");
+    }
+    if (!accept_command_sequence(sequence)) {
+        return send_text(request, "409 Conflict", "Stale command ignored");
     }
 
     if (motion == MotorMotion::Stop) {
@@ -209,11 +238,13 @@ esp_err_t state_handler(httpd_req_t *request)
         response, sizeof(response),
         "{\"mode\":\"%s\",\"motion\":\"%s\",\"distanceCm\":%s,"
         "\"followDistanceCm\":%.1f,\"obstacleDistanceCm\":%.1f,"
+        "\"manualFrontBrakeActive\":%s,"
         "\"roomCalibrating\":%s,\"roomIntruderDetected\":%s,"
         "\"telegramEnabled\":%s,\"telegramConfigured\":%s,"
         "\"ip\":\"%s\",\"rssi\":%d}",
         robot_mode_name(state.mode), motor_motion_name(state.motion), distance,
         state.follow_distance_cm, state.obstacle_distance_cm,
+        state.manual_front_brake_active ? "true" : "false",
         state.room_calibrating ? "true" : "false",
         state.room_intruder_detected ? "true" : "false",
         telegram_client_is_enabled() ? "true" : "false",
