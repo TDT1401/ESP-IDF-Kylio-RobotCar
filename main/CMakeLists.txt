@@ -1,2 +1,25 @@
-idf_component_register(SRCS "main.cpp"
-                    INCLUDE_DIRS ".")
+idf_component_register(
+    SRCS
+        "main.cpp"
+        "motor_controller.cpp"
+        "robot_controller.cpp"
+        "telegram_client.cpp"
+        "ultrasonic.cpp"
+        "web_server.cpp"
+        "wifi_manager.cpp"
+    INCLUDE_DIRS "."
+    REQUIRES
+        esp-tls
+        esp_driver_gpio
+        esp_event
+        esp_http_client
+        esp_http_server
+        esp_netif
+        esp_rom
+        esp_timer
+        esp_wifi
+        espressif__cjson
+        freertos
+        mbedtls
+        nvs_flash
+)
