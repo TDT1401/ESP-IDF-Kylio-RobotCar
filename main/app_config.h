@@ -45,7 +45,7 @@ inline constexpr gpio_num_t kBackLeftB = GPIO_NUM_25;
 inline constexpr gpio_num_t kBackRightA = GPIO_NUM_33;
 inline constexpr gpio_num_t kBackRightB = GPIO_NUM_32;
 
-inline constexpr gpio_num_t kUltrasonicTrig = GPIO_NUM_4;
+inline constexpr gpio_num_t kUltrasonicTrig = GPIO_NUM_18;
 inline constexpr gpio_num_t kUltrasonicEcho = GPIO_NUM_5;
 inline constexpr uint32_t kUltrasonicTimeoutUs = 30000;
 inline constexpr uint32_t kUltrasonicMinIntervalMs = 70;
