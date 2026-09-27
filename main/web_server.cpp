@@ -14,6 +14,7 @@
 #include "mbedtls/base64.h"
 #include "robot_controller.h"
 #include "telegram_client.h"
+#include "telegram_messages.h"
 #include "web_page.h"
 #include "wifi_manager.h"
 
@@ -220,8 +221,9 @@ esp_err_t telegram_handler(httpd_req_t *request)
     }
     robot_controller_emergency_stop();
     telegram_client_set_enabled(enabled);
-    telegram_client_enqueue_message(enabled ? "Telegram Control ON"
-                                            : "Telegram Control OFF");
+    telegram_client_enqueue_message(
+        enabled ? telegram_messages::kTelegramControlOn
+                : telegram_messages::kTelegramControlOff);
     return send_text(request, "200 OK", "OK");
 }
 

@@ -2,7 +2,7 @@
 
 Native ESP-IDF port of the Kylio Arduino firmware. It provides mecanum motor
 control, HC-SR04 distance measurement, manual web control, obstacle avoidance,
-follow mode, room monitoring, and Telegram notifications/settings.
+follow mode, room monitoring, and Telegram notifications/control.
 
 ## Wiring diagram
 
@@ -68,6 +68,18 @@ idf.py -p COM6 flash monitor
 Exit the monitor with `Ctrl+]`. After the station connects, the log prints the
 dashboard address, for example `http://192.168.1.42`. The browser will request
 the username and password configured in `secrets.local.h`.
+
+## Telegram control
+
+Enable Telegram Control from the web dashboard, then send `/start` or `/menu`
+to open the inline control panel. The panel can display and refresh robot
+status, stop the robot, open distance settings, and activate Follow, Obstacle,
+or Room Monitor mode. Modes that can move the robot require confirmation.
+
+Follow and Avoid distances can be adjusted with the inline `-10`, `-5`, `+5`,
+and `+10` buttons or entered manually. Directional driving remains available
+only through the local web dashboard because Telegram latency is not suitable
+for hold-to-drive motor control.
 
 ## Safety behavior
 

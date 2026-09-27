@@ -17,10 +17,10 @@ khi firmware đã đặt các chân điều khiển về trạng thái an toàn.
 
 Trong code hiện tại, bánh **trước phải** được điều khiển bởi hai GPIO sau:
 
-| Tín hiệu trong code | GPIO ESP32 | Nối đến |
-| --- | ---: | --- |
-| `FrontRightA` | GPIO14 | một chân `INx` của kênh L298N điều khiển bánh trước phải |
-| `FrontRightB` | GPIO27 | chân `INx` còn lại của chính kênh đó |
+| Tín hiệu trong code | GPIO ESP32 | Nối đến                                                  |
+| ------------------- | ---------: | -------------------------------------------------------- |
+| `FrontRightA`       |     GPIO14 | một chân `IN3` của kênh L298N điều khiển bánh trước phải |
+| `FrontRightB`       |     GPIO27 | chân `IN4` còn lại của chính kênh đó                     |
 
 Tên chân trên module có thể là `IN1`/`IN2` hoặc `IN3`/`IN4`, tùy bánh được
 nối vào `OUT1`/`OUT2` hay `OUT3`/`OUT4`. Hãy lần theo hai dây từ GPIO14 và
@@ -32,13 +32,13 @@ GPIO27; **không đoán theo số IN**.
 10 kΩ (có thể dùng 4.7 kΩ đến 10 kΩ).
 
 ```text
-ESP32 GPIO14 ----+---- L298N INx  (dây thứ nhất của bánh trước phải)
+ESP32 GPIO14 ----+---- L298N IN3  (dây thứ nhất của bánh trước phải)
                  |
                [10 kΩ]
                  |
 ESP32 GND --------+---- L298N GND
 
-ESP32 GPIO27 ----+---- L298N INy  (dây thứ hai của bánh trước phải)
+ESP32 GPIO27 ----+---- L298N IN4  (dây thứ hai của bánh trước phải)
                  |
                [10 kΩ]
                  |
@@ -85,10 +85,10 @@ giữ EN ở HIGH, làm mất tác dụng bảo vệ lúc boot.
 
 ### Vì sao cần cả GPIO19 và điện trở?
 
-| Thời điểm | GPIO19 | Điện trở 10 kΩ | EN thực tế | Kết quả |
-| --- | --- | --- | --- | --- |
-| Mới bật nguồn / reset | chưa cấu hình | kéo xuống GND | LOW | L298N tắt kênh motor |
-| Firmware đã sẵn sàng | output HIGH | vẫn kéo xuống yếu | HIGH | L298N cho motor hoạt động |
+| Thời điểm             | GPIO19        | Điện trở 10 kΩ    | EN thực tế | Kết quả                   |
+| --------------------- | ------------- | ----------------- | ---------- | ------------------------- |
+| Mới bật nguồn / reset | chưa cấu hình | kéo xuống GND     | LOW        | L298N tắt kênh motor      |
+| Firmware đã sẵn sàng  | output HIGH   | vẫn kéo xuống yếu | HIGH       | L298N cho motor hoạt động |
 
 - Chỉ có điện trở: EN luôn LOW, motor không chạy.
 - Chỉ có GPIO: khi ESP32 boot chân GPIO có thể floating, lỗi có thể vẫn xảy ra.
