@@ -36,23 +36,20 @@ Trước khi tháo hoặc thay đổi dây:
 
 Tạo một hàng cho mỗi dây. Điền đủ cả dây nguồn và GND. Bảng mẫu:
 
-| Từ | Đến | Nhãn mạch | Ghi chú |
-| --- | --- | --- | --- |
-| ESP32 GPIO13 | L298N-? IN? | `MOTOR_FL_A` | Bánh trước trái, input A |
-| ESP32 GPIO12 | L298N-? IN? | `MOTOR_FL_B` | Bánh trước trái, input B |
-| ESP32 GPIO14 | L298N-? IN? | `MOTOR_FR_A` | Bánh trước phải, input A |
-| ESP32 GPIO27 | L298N-? IN? | `MOTOR_FR_B` | Bánh trước phải, input B |
-| ESP32 GPIO26 | L298N-? IN? | `MOTOR_BL_A` | Bánh sau trái, input A |
-| ESP32 GPIO25 | L298N-? IN? | `MOTOR_BL_B` | Bánh sau trái, input B |
-| ESP32 GPIO33 | L298N-? IN? | `MOTOR_BR_A` | Bánh sau phải, input A |
-| ESP32 GPIO32 | L298N-? IN? | `MOTOR_BR_B` | Bánh sau phải, input B |
-| ESP32 GPIO18 | HC-SR04 TRIG | `ULTRASONIC_TRIG` | chân xuất xung |
-| ESP32 GPIO5 | HC-SR04 ECHO | `ULTRASONIC_ECHO` | tín hiệu về ESP32, tối đa 3.3 V |
-| ESP32 GND | L298N GND | `GND` | mass chung |
-| ESP32 GND | HC-SR04 GND | `GND` | mass chung |
-
-Các dòng motor ở trên lấy từ `main/app_config.h`. Phần `L298N-? IN?` phải
-được điền theo dây thực tế của xe, không tự đoán `IN1`/`IN2`/`IN3`/`IN4`.
+| Từ           | Đến          | Nhãn mạch         | Ghi chú                         |
+| ------------ | ------------ | ----------------- | ------------------------------- |
+| ESP32 GPIO13 | L298N-A IN1  | `MOTOR_FL_A`      | Bánh trước trái, input A        |
+| ESP32 GPIO12 | L298N-A IN2  | `MOTOR_FL_B`      | Bánh trước trái, input B        |
+| ESP32 GPIO14 | L298N-A IN3  | `MOTOR_FR_A`      | Bánh trước phải, input A        |
+| ESP32 GPIO27 | L298N-A IN4  | `MOTOR_FR_B`      | Bánh trước phải, input B        |
+| ESP32 GPIO26 | L298N-B IN1  | `MOTOR_BL_A`      | Bánh sau trái, input A          |
+| ESP32 GPIO25 | L298N-B IN2  | `MOTOR_BL_B`      | Bánh sau trái, input B          |
+| ESP32 GPIO33 | L298N-B IN3  | `MOTOR_BR_A`      | Bánh sau phải, input A          |
+| ESP32 GPIO32 | L298N-B IN4  | `MOTOR_BR_B`      | Bánh sau phải, input B          |
+| ESP32 GPIO18 | HC-SR04 TRIG | `ULTRASONIC_TRIG` | chân xuất xung                  |
+| ESP32 GPIO5  | HC-SR04 ECHO | `ULTRASONIC_ECHO` | tín hiệu về ESP32, tối đa 3.3 V |
+| ESP32 GND    | L298N GND    | `GND`             | mass chung                      |
+| ESP32 GND    | HC-SR04 GND  | `GND`             | mass chung                      |
 
 Thêm các hàng còn thiếu cho:
 

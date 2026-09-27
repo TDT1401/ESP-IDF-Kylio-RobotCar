@@ -4,6 +4,10 @@ Native ESP-IDF port of the Kylio Arduino firmware. It provides mecanum motor
 control, HC-SR04 distance measurement, manual web control, obstacle avoidance,
 follow mode, room monitoring, and Telegram notifications/settings.
 
+## Wiring diagram
+
+![Kylio Robot Car wiring diagram](docs/images/kylio-wiring-diagram.png)
+
 ## Configure local secrets
 
 Create the local configuration file once:
