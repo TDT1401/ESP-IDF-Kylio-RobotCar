@@ -10,6 +10,7 @@ idf_component_register(
     REQUIRES
         esp-tls
         esp_driver_gpio
+        esp_driver_ledc
         esp_event
         esp_http_client
         esp_http_server

@@ -48,8 +48,9 @@ Thêm các hàng còn thiếu cho:
 
 - Hai motor bên trái mắc song song vào cặp `OUT1`/`OUT2` (kênh A).
 - Hai motor bên phải mắc song song vào cặp `OUT3`/`OUT4` (kênh B).
-- `ENA`/`ENB` của module cần được bật; firmware hiện chỉ điều khiển
-  `IN1`–`IN4`, chưa điều khiển tốc độ bằng PWM.
+- Giữ `ENA`/`ENB` của module ở trạng thái bật (jumper theo module đang dùng).
+  HUD tạo PWM trên `IN1`–`IN4` để chỉnh riêng tốc độ hai bên bánh;
+  không cần thêm dây GPIO cho `ENA`/`ENB`.
 - Nguồn pin vào L298N; đường 5 V/3.3 V vào ESP32.
 - Mọi điện trở, công tắc, công tắc nguồn, tụ hoặc mạch hạ áp.
 

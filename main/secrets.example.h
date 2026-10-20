@@ -6,7 +6,6 @@
 #define KYLIO_WIFI_NETWORKS                                                \
     {                                                                     \
         {"YOUR_WIFI_SSID", "YOUR_WIFI_PASSWORD"},                        \
-        {"OPTIONAL_SECOND_WIFI_SSID", "OPTIONAL_SECOND_WIFI_PASSWORD"},  \
     }
 
 #define KYLIO_TELEGRAM_BOT_TOKEN "YOUR_NEW_TELEGRAM_BOT_TOKEN"

@@ -2,8 +2,9 @@
 
 Native ESP-IDF firmware for the Kylio robot car. One L298N controls the two
 left motors together on channel A and the two right motors together on channel
-B. The web dashboard provides forward, backward, rotate-left, rotate-right,
-and stop controls. Telegram sends one startup notification with the web address.
+B. The web dashboard has basic directional controls and a landscape HUD with
+an analog joystick for variable speed and curved turns. Telegram sends one
+startup notification with the web address.
 
 ## Wiring
 
@@ -21,7 +22,7 @@ Copy-Item .\main\secrets.example.h .\main\secrets.local.h
 
 Edit `main/secrets.local.h` and set:
 
-- one or more Wi-Fi SSID/password pairs;
+- the Wi-Fi SSID and password;
 - a newly generated Telegram bot token and its allowed chat ID;
 - a strong username/password for the web dashboard.
 
@@ -81,8 +82,24 @@ The dashboard shows motion, IP address, and Wi-Fi signal strength.
 If Telegram still shows commands registered by an older firmware, remove that
 saved command menu in BotFather. The new firmware ignores those commands.
 
+## Web HUD
+
+Open the **HUD** tab to enter the dark, gamepad-style full-screen controller.
+Rotate a phone to landscape when prompted. The left side has the same four
+directional buttons as the basic tab; the center shows left and right motor
+output and the Stop button; the right side has the analog joystick. Drag the
+joystick up or down to drive forward or backward; drag sideways while moving
+to steer in an arc. The joystick mixes independent left and right motor power
+from -100% to 100% and ramps changes smoothly. Touching either control takes
+over from the other. Use **Thoát HUD** to return to the basic controls.
+Releasing the joystick, leaving HUD, or losing command heartbeats stops both
+sides. If the browser does not support the Fullscreen API, HUD still fills the
+available viewport. Keep the L298N ENA and ENB jumpers enabled; PWM uses
+IN1–IN4, so the existing wiring needs no additional GPIO connections.
+
 ## Safety behavior
 
 - All motor GPIOs are driven LOW during startup.
-- Manual controls send a heartbeat every 100 ms while held; the firmware stops
-  the motors if that heartbeat disappears for 350 ms.
+- Both control tabs send a heartbeat every 100 ms while held; the firmware
+  stops the motors if that heartbeat disappears for 350 ms. Releasing the
+  joystick or pressing Stop cuts motor power immediately.
