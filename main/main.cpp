@@ -4,7 +4,6 @@
 #include "nvs_flash.h"
 #include "robot_controller.h"
 #include "telegram_client.h"
-#include "ultrasonic.h"
 #include "web_server.h"
 #include "wifi_manager.h"
 
@@ -31,7 +30,6 @@ extern "C" void app_main(void)
 
     // Initialize motors first so every control pin is LOW before tasks start.
     ESP_ERROR_CHECK(motor_controller_init());
-    ESP_ERROR_CHECK(ultrasonic_init());
     ESP_ERROR_CHECK(robot_controller_start());
 
     const esp_err_t wifi_result = wifi_manager_start();
@@ -39,7 +37,7 @@ extern "C" void app_main(void)
         ESP_LOGE(kTag, "Wi-Fi did not start: %s", esp_err_to_name(wifi_result));
     }
 
-    ESP_ERROR_CHECK(telegram_client_start());
     ESP_ERROR_CHECK(web_server_start());
+    ESP_ERROR_CHECK(telegram_client_start());
     ESP_LOGI(kTag, "Kylio firmware initialized");
 }

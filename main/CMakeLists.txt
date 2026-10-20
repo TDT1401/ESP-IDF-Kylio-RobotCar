@@ -4,7 +4,6 @@ idf_component_register(
         "motor_controller.cpp"
         "robot_controller.cpp"
         "telegram_client.cpp"
-        "ultrasonic.cpp"
         "web_server.cpp"
         "wifi_manager.cpp"
     INCLUDE_DIRS "."
@@ -15,7 +14,6 @@ idf_component_register(
         esp_http_client
         esp_http_server
         esp_netif
-        esp_rom
         esp_timer
         esp_wifi
         espressif__cjson

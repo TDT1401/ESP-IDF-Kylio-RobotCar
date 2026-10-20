@@ -1,12 +1,15 @@
 # Kylio Robot Car — ESP-IDF
 
-Native ESP-IDF port of the Kylio Arduino firmware. It provides mecanum motor
-control, HC-SR04 distance measurement, manual web control, obstacle avoidance,
-follow mode, room monitoring, and Telegram notifications/control.
+Native ESP-IDF firmware for the Kylio robot car. One L298N controls the two
+left motors together on channel A and the two right motors together on channel
+B. The web dashboard provides forward, backward, rotate-left, rotate-right,
+and stop controls. Telegram sends one startup notification with the web address.
 
-## Wiring diagram
+## Wiring
 
-![Kylio Robot Car wiring diagram](docs/images/kylio-wiring-diagram.png)
+See [HOW_TO_DRAW_WIRING_DIAGRAM.md](HOW_TO_DRAW_WIRING_DIAGRAM.md) for the
+current motor and ESP32 wiring checklist. GPIO18, GPIO5, GPIO26, GPIO25,
+GPIO33, and GPIO32 are no longer used by this firmware.
 
 ## Configure local secrets
 
@@ -69,26 +72,17 @@ Exit the monitor with `Ctrl+]`. After the station connects, the log prints the
 dashboard address, for example `http://192.168.1.42`. The browser will request
 the username and password configured in `secrets.local.h`.
 
-## Telegram control
+## Telegram notification
 
-Enable Telegram Control from the web dashboard, then send `/start` or `/menu`
-to open the inline control panel. The panel can display and refresh robot
-status, stop the robot, open distance settings, and activate Follow, Obstacle,
-or Room Monitor mode. Modes that can move the robot require confirmation.
-
-Follow and Avoid distances can be adjusted with the inline `-10`, `-5`, `+5`,
-and `+10` buttons or entered manually. Directional driving remains available
-only through the local web dashboard because Telegram latency is not suitable
-for hold-to-drive motor control.
+If a bot token and chat ID are configured, the car automatically sends one
+notification after each boot when Wi-Fi connects. The message contains a link
+to the web dashboard. Telegram does not receive commands or report status.
+The dashboard shows motion, IP address, and Wi-Fi signal strength.
+If Telegram still shows commands registered by an older firmware, remove that
+saved command menu in BotFather. The new firmware ignores those commands.
 
 ## Safety behavior
 
 - All motor GPIOs are driven LOW during startup.
 - Manual controls send a heartbeat every 100 ms while held; the firmware stops
   the motors if that heartbeat disappears for 350 ms.
-- HC-SR04 timeouts do not interrupt manual forward motion. The front brake
-  stops manual forward only after three valid measurements below 25 cm;
-  it releases after a valid reading of at least 32 cm.
-- A missing/invalid ultrasonic reading stops follow and automatic obstacle
-  motion.
-- Changing mode or enabling/disabling Telegram immediately stops the motors.

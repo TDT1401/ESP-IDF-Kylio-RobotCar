@@ -8,12 +8,6 @@ enum class MotorMotion {
     Backward,
     Left,
     Right,
-    ForwardLeft,
-    ForwardRight,
-    BackLeft,
-    BackRight,
-    RotateLeft,
-    RotateRight,
 };
 
 esp_err_t motor_controller_init();
