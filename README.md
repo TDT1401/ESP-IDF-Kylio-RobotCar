@@ -90,8 +90,11 @@ directional buttons as the basic tab; the center shows left and right motor
 output and the Stop button; the right side has the analog joystick. Drag the
 joystick up or down to drive forward or backward; drag sideways while moving
 to steer in an arc. The joystick mixes independent left and right motor power
-from -100% to 100% and ramps changes smoothly. Touching either control takes
-over from the other. Use **Thoát HUD** to return to the basic controls.
+from -100% to 100% and ramps changes smoothly. While moving, joystick commands
+are sent at most every 50 ms; an unchanged hold sends a 100 ms heartbeat.
+Wi-Fi modem sleep is disabled to reduce command latency, increasing ESP32 power
+consumption. Touching either control takes over from the other. Use **Thoát
+HUD** to return to the basic controls.
 Releasing the joystick, leaving HUD, or losing command heartbeats stops both
 sides. If the browser does not support the Fullscreen API, HUD still fills the
 available viewport. Keep the L298N ENA and ENB jumpers enabled; PWM uses
@@ -103,3 +106,6 @@ IN1–IN4, so the existing wiring needs no additional GPIO connections.
 - Both control tabs send a heartbeat every 100 ms while held; the firmware
   stops the motors if that heartbeat disappears for 350 ms. Releasing the
   joystick or pressing Stop cuts motor power immediately.
+- Long-press text selection and context menus are disabled over the controls.
+  If a native selection or drag begins anyway, the page releases the active
+  control and sends Stop.

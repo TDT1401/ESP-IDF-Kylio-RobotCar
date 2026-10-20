@@ -223,6 +223,8 @@ esp_err_t wifi_manager_start()
 
     ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    // Keep the radio awake so drive commands are not delayed by the AP's DTIM.
+    ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
     return esp_wifi_start();
 }
 
