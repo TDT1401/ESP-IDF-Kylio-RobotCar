@@ -1,6 +1,8 @@
 idf_component_register(
     SRCS
         "main.cpp"
+        "bluetooth_gamepad.cpp"
+        "esp_hid_gap.c"
         "motor_controller.cpp"
         "robot_controller.cpp"
         "telegram_client.cpp"
@@ -15,6 +17,7 @@ idf_component_register(
         esp_http_client
         esp_http_server
         esp_netif
+        esp_hid
         esp_timer
         esp_wifi
         espressif__cjson

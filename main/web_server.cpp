@@ -8,6 +8,8 @@
 #include <string>
 
 #include "app_config.h"
+#include "bluetooth_gamepad.h"
+#include "cJSON.h"
 #include "esp_http_server.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -126,6 +128,18 @@ bool parse_power(const char *value, int *power)
     return true;
 }
 
+bool parse_device_id(const char *value, std::size_t *device_id)
+{
+    errno = 0;
+    char *end = nullptr;
+    const unsigned long parsed = std::strtoul(value, &end, 10);
+    if (errno != 0 || end == value || *end != '\0' || parsed > 65535) {
+        return false;
+    }
+    *device_id = static_cast<std::size_t>(parsed);
+    return true;
+}
+
 esp_err_t send_text(httpd_req_t *request, const char *status,
                     const char *message)
 {
@@ -236,18 +250,110 @@ esp_err_t state_handler(httpd_req_t *request)
 {
     if (!authenticate(request)) return ESP_OK;
     const RobotSnapshot state = robot_controller_snapshot();
-    char response[256];
+    const BluetoothGamepadStatus gamepad = bluetooth_gamepad_status();
+    char response[512];
     std::snprintf(
         response, sizeof(response),
         "{\"motion\":\"%s\",\"leftPower\":%d,\"rightPower\":%d,"
-        "\"wifiConnected\":%s,\"ip\":\"%s\",\"rssi\":%d}",
+        "\"wifiConnected\":%s,\"ip\":\"%s\",\"rssi\":%d,"
+        "\"gamepadConnected\":%s,\"gamepadScanning\":%s,"
+        "\"gamepadConnecting\":%s,\"gamepadStatus\":\"%s\"}",
         motor_motion_name(state.motion),
         state.left_power, state.right_power,
         wifi_manager_is_connected() ? "true" : "false",
-        wifi_manager_ip_address().c_str(), wifi_manager_rssi());
+        wifi_manager_ip_address().c_str(), wifi_manager_rssi(),
+        gamepad.connected ? "true" : "false",
+        gamepad.scanning ? "true" : "false",
+        gamepad.connecting ? "true" : "false", gamepad.message);
     httpd_resp_set_type(request, "application/json");
     httpd_resp_set_hdr(request, "Cache-Control", "no-store");
     return httpd_resp_sendstr(request, response);
+}
+
+esp_err_t gamepad_scan_handler(httpd_req_t *request)
+{
+    if (!authenticate(request)) return ESP_OK;
+    const esp_err_t result = bluetooth_gamepad_scan();
+    if (result == ESP_ERR_INVALID_STATE) {
+        return send_text(request, "409 Conflict",
+                         "Bluetooth is not ready, connected, or already scanning");
+    }
+    if (result != ESP_OK) return send_text(request, "500 Internal Server Error", "Could not start scan");
+    return send_text(request, "202 Accepted", "Bluetooth HID scan started");
+}
+
+esp_err_t gamepad_devices_handler(httpd_req_t *request)
+{
+    if (!authenticate(request)) return ESP_OK;
+    const BluetoothGamepadStatus status = bluetooth_gamepad_status();
+    cJSON *root = cJSON_CreateObject();
+    cJSON *devices = cJSON_CreateArray();
+    if (root == nullptr || devices == nullptr) {
+        cJSON_Delete(root);
+        cJSON_Delete(devices);
+        return send_text(request, "500 Internal Server Error", "Out of memory");
+    }
+    cJSON_AddBoolToObject(root, "scanning", status.scanning);
+    cJSON_AddBoolToObject(root, "connecting", status.connecting);
+    cJSON_AddBoolToObject(root, "connected", status.connected);
+    cJSON_AddNumberToObject(root, "inputReports", status.input_reports);
+    cJSON_AddNumberToObject(root, "decodedReports", status.decoded_reports);
+    cJSON_AddNumberToObject(root, "notifyRegistrations", status.notify_registrations);
+    cJSON_AddNumberToObject(root, "notifyFailures", status.notify_failures);
+    cJSON_AddStringToObject(root, "status", status.message);
+    cJSON_AddItemToObject(root, "devices", devices);
+    const std::size_t count = bluetooth_gamepad_device_count();
+    for (std::size_t i = 0; i < count; ++i) {
+        BluetoothDeviceInfo info{};
+        if (!bluetooth_gamepad_device_get(i, &info)) continue;
+        cJSON *device = cJSON_CreateObject();
+        if (device == nullptr) continue;
+        cJSON_AddNumberToObject(device, "id", static_cast<double>(info.id));
+        cJSON_AddStringToObject(device, "name", info.name);
+        cJSON_AddStringToObject(device, "address", info.address);
+        cJSON_AddStringToObject(device, "transport", info.transport);
+        cJSON_AddStringToObject(device, "usage", info.usage);
+        cJSON_AddNumberToObject(device, "rssi", info.rssi);
+        cJSON_AddItemToArray(devices, device);
+    }
+    char *serialized = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    if (serialized == nullptr) {
+        return send_text(request, "500 Internal Server Error", "Could not encode device list");
+    }
+    httpd_resp_set_type(request, "application/json");
+    httpd_resp_set_hdr(request, "Cache-Control", "no-store");
+    const esp_err_t result = httpd_resp_sendstr(request, serialized);
+    cJSON_free(serialized);
+    return result;
+}
+
+esp_err_t gamepad_connect_handler(httpd_req_t *request)
+{
+    if (!authenticate(request)) return ESP_OK;
+    char id_value[16] = {};
+    std::size_t device_id = 0;
+    if (!query_value(request, "id", id_value, sizeof(id_value)) ||
+        !parse_device_id(id_value, &device_id)) {
+        return send_text(request, "400 Bad Request", "Missing or invalid device id");
+    }
+    const esp_err_t result = bluetooth_gamepad_connect(device_id);
+    if (result == ESP_ERR_NOT_FOUND) {
+        return send_text(request, "404 Not Found", "Device not in the current scan results");
+    }
+    if (result == ESP_ERR_INVALID_STATE) {
+        return send_text(request, "409 Conflict", "Bluetooth is busy or already connected");
+    }
+    if (result != ESP_OK) return send_text(request, "500 Internal Server Error", "Could not connect to device");
+    return send_text(request, "202 Accepted", "Connection requested");
+}
+
+esp_err_t gamepad_disconnect_handler(httpd_req_t *request)
+{
+    if (!authenticate(request)) return ESP_OK;
+    const esp_err_t result = bluetooth_gamepad_disconnect();
+    if (result != ESP_OK) return send_text(request, "500 Internal Server Error", "Could not disconnect controller");
+    return send_text(request, "200 OK", "Disconnect requested");
 }
 
 esp_err_t not_found_handler(httpd_req_t *request, httpd_err_code_t)
@@ -288,7 +394,7 @@ esp_err_t web_server_start()
     }
 
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    config.max_uri_handlers = 5;
+    config.max_uri_handlers = 9;
     config.stack_size = 8192;
     config.lru_purge_enable = true;
 
@@ -301,6 +407,10 @@ esp_err_t web_server_start()
     register_get("/cmd", command_handler);
     register_get("/joy", joystick_handler);
     register_get("/api/state", state_handler);
+    register_get("/api/bt/scan", gamepad_scan_handler);
+    register_get("/api/bt/devices", gamepad_devices_handler);
+    register_get("/api/bt/connect", gamepad_connect_handler);
+    register_get("/api/bt/disconnect", gamepad_disconnect_handler);
     register_get("/favicon.ico", favicon_handler);
     httpd_register_err_handler(s_server, HTTPD_404_NOT_FOUND,
                                not_found_handler);

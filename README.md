@@ -100,6 +100,18 @@ sides. If the browser does not support the Fullscreen API, HUD still fills the
 available viewport. Keep the L298N ENA and ENB jumpers enabled; PWM uses
 IN1–IN4, so the existing wiring needs no additional GPIO connections.
 
+## Bluetooth gamepad
+
+The firmware scans for nearby Bluetooth HID devices, then lets you choose one
+from the **Bluetooth** tab in the web dashboard. Set the controller's mode to
+Bluetooth and put it in pairing mode before scanning. Select **Connect** beside
+the controller. The same tab shows the connection state and has a disconnect
+button; disconnecting stops the motors. No external Bluetooth UART module is
+used.
+
+The controller's left stick drives and steers the car when its HID report map
+uses standard gamepad axes. A web control already being held keeps control
+until it is released or times out. Re-scan to select another HID controller.
 ## Safety behavior
 
 - All motor GPIOs are driven LOW during startup.

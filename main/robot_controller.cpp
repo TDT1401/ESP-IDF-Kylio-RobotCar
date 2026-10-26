@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <limits>
 
 #include "app_config.h"
 #include "esp_timer.h"
@@ -13,7 +14,7 @@ namespace {
 
 constexpr int kJoystickSlewPerTick = 10;
 
-enum class CommandMode { Manual, Joystick };
+enum class CommandMode { Manual, Joystick, Gamepad };
 
 struct ControllerState {
     int target_left = 0;
@@ -46,6 +47,7 @@ void stop_locked()
     s_state.applied_left = 0;
     s_state.applied_right = 0;
     s_state.manual_motion = MotorMotion::Stop;
+    s_state.mode = CommandMode::Manual;
     motor_controller_stop();
 }
 
@@ -85,7 +87,8 @@ void controller_task(void *)
                 app_config::kManualCommandTimeoutMs) {
             stop_locked();
         } else {
-            if (s_state.mode == CommandMode::Joystick) {
+            if (s_state.mode == CommandMode::Joystick ||
+                s_state.mode == CommandMode::Gamepad) {
                 s_state.applied_left = approach(s_state.applied_left,
                                                 s_state.target_left);
                 s_state.applied_right = approach(s_state.applied_right,
@@ -180,6 +183,29 @@ bool robot_controller_set_joystick_command(int left_power, int right_power,
     s_state.target_right = std::clamp(right_power, -100, 100);
     xSemaphoreGive(s_mutex);
     return true;
+}
+
+void robot_controller_set_gamepad_command(int left_power, int right_power,
+                                          bool active)
+{
+    xSemaphoreTake(s_mutex, portMAX_DELAY);
+    if (!active) {
+        if (s_state.mode == CommandMode::Gamepad) stop_locked();
+        xSemaphoreGive(s_mutex);
+        return;
+    }
+    // A currently held web control keeps priority. After it is released or
+    // times out, the next controller report can take control again.
+    if (s_state.active_hold_id != 0 && s_state.mode != CommandMode::Gamepad) {
+        xSemaphoreGive(s_mutex);
+        return;
+    }
+    s_state.active_hold_id = std::numeric_limits<uint64_t>::max();
+    s_state.command_updated_ms = now_ms();
+    s_state.mode = CommandMode::Gamepad;
+    s_state.target_left = std::clamp(left_power, -100, 100);
+    s_state.target_right = std::clamp(right_power, -100, 100);
+    xSemaphoreGive(s_mutex);
 }
 
 void robot_controller_emergency_stop()

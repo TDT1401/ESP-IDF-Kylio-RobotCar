@@ -1,5 +1,6 @@
 #include "esp_err.h"
 #include "esp_log.h"
+#include "bluetooth_gamepad.h"
 #include "motor_controller.h"
 #include "nvs_flash.h"
 #include "robot_controller.h"
@@ -31,6 +32,12 @@ extern "C" void app_main(void)
     // Initialize motors first so every control pin is LOW before tasks start.
     ESP_ERROR_CHECK(motor_controller_init());
     ESP_ERROR_CHECK(robot_controller_start());
+
+    const esp_err_t bluetooth_result = bluetooth_gamepad_start();
+    if (bluetooth_result != ESP_OK) {
+        ESP_LOGE(kTag, "Bluetooth gamepad did not start: %s",
+                 esp_err_to_name(bluetooth_result));
+    }
 
     const esp_err_t wifi_result = wifi_manager_start();
     if (wifi_result != ESP_OK) {
