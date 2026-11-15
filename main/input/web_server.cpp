@@ -5,15 +5,11 @@
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
-#include <string>
-
-#include "config/app_config.h"
 #include "bluetooth_gamepad.h"
 #include "cJSON.h"
 #include "esp_http_server.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
-#include "mbedtls/base64.h"
 #include "control/robot_controller.h"
 #include "web_page.h"
 #include "services/wifi_manager.h"
@@ -22,60 +18,8 @@ namespace {
 
 constexpr const char *kTag = "web";
 httpd_handle_t s_server = nullptr;
-std::string s_expected_authorization;
 uint64_t s_last_command_sequence = 0;
 portMUX_TYPE s_command_sequence_lock = portMUX_INITIALIZER_UNLOCKED;
-
-bool constant_time_equal(const char *left, const std::string &right)
-{
-    if (left == nullptr) {
-        return false;
-    }
-    const std::size_t left_length = std::strlen(left);
-    if (left_length != right.size()) {
-        return false;
-    }
-    unsigned char difference = 0;
-    for (std::size_t i = 0; i < left_length; ++i) {
-        difference |= static_cast<unsigned char>(left[i] ^ right[i]);
-    }
-    return difference == 0;
-}
-
-void initialize_authorization_value()
-{
-    const std::string credentials =
-        std::string(app_config::kWebUsername) + ":" + app_config::kWebPassword;
-    unsigned char encoded[192] = {};
-    std::size_t encoded_length = 0;
-    const int result = mbedtls_base64_encode(
-        encoded, sizeof(encoded), &encoded_length,
-        reinterpret_cast<const unsigned char *>(credentials.data()),
-        credentials.size());
-    if (result == 0) {
-        s_expected_authorization = "Basic ";
-        s_expected_authorization.append(
-            reinterpret_cast<const char *>(encoded), encoded_length);
-    }
-}
-
-bool authenticate(httpd_req_t *request)
-{
-    char authorization[256] = {};
-    const esp_err_t result = httpd_req_get_hdr_value_str(
-        request, "Authorization", authorization, sizeof(authorization));
-    if (result == ESP_OK &&
-        constant_time_equal(authorization, s_expected_authorization)) {
-        return true;
-    }
-
-    httpd_resp_set_status(request, "401 Unauthorized");
-    httpd_resp_set_hdr(request, "WWW-Authenticate",
-                       "Basic realm=\"Kylio Robot\"");
-    httpd_resp_set_type(request, "text/plain");
-    httpd_resp_sendstr(request, "Authentication required");
-    return false;
-}
 
 bool query_value(httpd_req_t *request, const char *key, char *value,
                  std::size_t value_size)
@@ -150,9 +94,6 @@ esp_err_t send_text(httpd_req_t *request, const char *status,
 
 esp_err_t root_handler(httpd_req_t *request)
 {
-    if (!authenticate(request)) {
-        return ESP_OK;
-    }
     httpd_resp_set_type(request, "text/html; charset=utf-8");
     httpd_resp_set_hdr(request, "Cache-Control", "no-store");
     return httpd_resp_send(request, kWebPage, HTTPD_RESP_USE_STRLEN);
@@ -172,8 +113,6 @@ MotorMotion direction_to_motion(const char *direction, bool *valid)
 
 esp_err_t command_handler(httpd_req_t *request)
 {
-    if (!authenticate(request)) return ESP_OK;
-
     char direction[8] = {};
     char state_value[8] = {};
     char sequence[24] = {};
@@ -212,8 +151,6 @@ esp_err_t command_handler(httpd_req_t *request)
 
 esp_err_t joystick_handler(httpd_req_t *request)
 {
-    if (!authenticate(request)) return ESP_OK;
-
     char left_value[8] = {};
     char right_value[8] = {};
     char state_value[8] = {};
@@ -248,7 +185,6 @@ esp_err_t joystick_handler(httpd_req_t *request)
 
 esp_err_t state_handler(httpd_req_t *request)
 {
-    if (!authenticate(request)) return ESP_OK;
     const RobotSnapshot state = robot_controller_snapshot();
     const BluetoothGamepadStatus gamepad = bluetooth_gamepad_status();
     char response[512];
@@ -272,7 +208,6 @@ esp_err_t state_handler(httpd_req_t *request)
 
 esp_err_t gamepad_scan_handler(httpd_req_t *request)
 {
-    if (!authenticate(request)) return ESP_OK;
     const esp_err_t result = bluetooth_gamepad_scan();
     if (result == ESP_ERR_INVALID_STATE) {
         return send_text(request, "409 Conflict",
@@ -284,7 +219,6 @@ esp_err_t gamepad_scan_handler(httpd_req_t *request)
 
 esp_err_t gamepad_devices_handler(httpd_req_t *request)
 {
-    if (!authenticate(request)) return ESP_OK;
     const BluetoothGamepadStatus status = bluetooth_gamepad_status();
     cJSON *root = cJSON_CreateObject();
     cJSON *devices = cJSON_CreateArray();
@@ -330,7 +264,6 @@ esp_err_t gamepad_devices_handler(httpd_req_t *request)
 
 esp_err_t gamepad_connect_handler(httpd_req_t *request)
 {
-    if (!authenticate(request)) return ESP_OK;
     char id_value[16] = {};
     std::size_t device_id = 0;
     if (!query_value(request, "id", id_value, sizeof(id_value)) ||
@@ -350,7 +283,6 @@ esp_err_t gamepad_connect_handler(httpd_req_t *request)
 
 esp_err_t gamepad_disconnect_handler(httpd_req_t *request)
 {
-    if (!authenticate(request)) return ESP_OK;
     const esp_err_t result = bluetooth_gamepad_disconnect();
     if (result != ESP_OK) return send_text(request, "500 Internal Server Error", "Could not disconnect controller");
     return send_text(request, "200 OK", "Disconnect requested");
@@ -358,13 +290,11 @@ esp_err_t gamepad_disconnect_handler(httpd_req_t *request)
 
 esp_err_t not_found_handler(httpd_req_t *request, httpd_err_code_t)
 {
-    if (!authenticate(request)) return ESP_OK;
     return send_text(request, "404 Not Found", "Not found");
 }
 
 esp_err_t favicon_handler(httpd_req_t *request)
 {
-    if (!authenticate(request)) return ESP_OK;
     httpd_resp_set_status(request, "204 No Content");
     return httpd_resp_send(request, nullptr, 0);
 }
@@ -384,15 +314,6 @@ void register_get(const char *uri, esp_err_t (*handler)(httpd_req_t *))
 
 esp_err_t web_server_start()
 {
-    if (std::strcmp(app_config::kWebPassword, "change-me") == 0) {
-        ESP_LOGE(kTag, "Refusing to start with the default web password");
-        return ESP_ERR_INVALID_STATE;
-    }
-    initialize_authorization_value();
-    if (s_expected_authorization.empty()) {
-        return ESP_FAIL;
-    }
-
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.max_uri_handlers = 9;
     config.stack_size = 8192;

@@ -25,8 +25,7 @@ Copy-Item .\main\config\secrets.example.h .\main\config\secrets.local.h
 Edit `main/config/secrets.local.h` and set:
 
 - the Wi-Fi SSID and password;
-- a newly generated Telegram bot token and its allowed chat ID;
-- a strong username/password for the web dashboard.
+- a newly generated Telegram bot token and its allowed chat ID.
 
 `secrets.local.h` is ignored by Git. Do not reuse the Telegram token contained
 in the imported Arduino archive; rotate it with BotFather first.
@@ -72,8 +71,8 @@ idf.py -p COM6 flash monitor
 ```
 
 Exit the monitor with `Ctrl+]`. After the station connects, the log prints the
-dashboard address, for example `http://192.168.1.42`. The browser will request
-the username and password configured in `secrets.local.h`.
+dashboard address, for example `http://192.168.1.42`. Open it directly in a
+browser; the web dashboard has no login.
 
 ## Telegram notification
 

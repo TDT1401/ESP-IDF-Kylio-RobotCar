@@ -26,14 +26,6 @@ struct WifiCredential {
 #define KYLIO_TELEGRAM_CHAT_ID ""
 #endif
 
-#ifndef KYLIO_WEB_USERNAME
-#define KYLIO_WEB_USERNAME "kylio"
-#endif
-
-#ifndef KYLIO_WEB_PASSWORD
-#define KYLIO_WEB_PASSWORD "change-me"
-#endif
-
 namespace app_config {
 
 // One L298N: channel A drives both left motors, channel B both right motors.
@@ -57,8 +49,4 @@ inline constexpr const char *kTelegramBotToken = KYLIO_TELEGRAM_BOT_TOKEN;
 inline constexpr const char *kTelegramChatId = KYLIO_TELEGRAM_CHAT_ID;
 inline constexpr uint32_t kTelegramRetryInitialMs = 1000;
 inline constexpr uint32_t kTelegramRetryMaxMs = 30000;
-
-inline constexpr const char *kWebUsername = KYLIO_WEB_USERNAME;
-inline constexpr const char *kWebPassword = KYLIO_WEB_PASSWORD;
-
 }  // namespace app_config

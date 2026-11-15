@@ -56,7 +56,7 @@ main/
 ├── CMakeLists.txt
 ├── idf_component.yml
 ├── input/                      # Layer nhận yêu cầu
-│   ├── web_server.cpp          # HTTP: xác thực, nhận lệnh, trả trạng thái
+│   ├── web_server.cpp          # HTTP: nhận lệnh, trả trạng thái
 │   ├── web_server.h
 │   ├── web_page.h              # Giao diện web
 │   ├── bluetooth_gamepad.cpp   # HID: kết nối, giải mã tay cầm

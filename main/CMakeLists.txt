@@ -23,6 +23,5 @@ idf_component_register(
         esp_wifi
         espressif__cjson
         freertos
-        mbedtls
         nvs_flash
 )
