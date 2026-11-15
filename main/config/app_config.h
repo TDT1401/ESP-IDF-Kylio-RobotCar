@@ -37,10 +37,12 @@ struct WifiCredential {
 namespace app_config {
 
 // One L298N: channel A drives both left motors, channel B both right motors.
-inline constexpr gpio_num_t kLeftIn1 = GPIO_NUM_13;
-inline constexpr gpio_num_t kLeftIn2 = GPIO_NUM_12;
-inline constexpr gpio_num_t kRightIn3 = GPIO_NUM_14;
-inline constexpr gpio_num_t kRightIn4 = GPIO_NUM_27;
+inline constexpr gpio_num_t kLeftIn1 = GPIO_NUM_26;
+inline constexpr gpio_num_t kLeftIn2 = GPIO_NUM_27;
+inline constexpr gpio_num_t kRightIn3 = GPIO_NUM_12;
+inline constexpr gpio_num_t kRightIn4 = GPIO_NUM_13;
+inline constexpr gpio_num_t kLeftEnable = GPIO_NUM_25;
+inline constexpr gpio_num_t kRightEnable = GPIO_NUM_14;
 
 inline constexpr uint32_t kControllerPeriodMs = 20;
 inline constexpr uint32_t kManualCommandTimeoutMs = 350;

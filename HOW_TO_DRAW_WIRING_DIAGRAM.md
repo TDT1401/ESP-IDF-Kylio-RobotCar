@@ -38,19 +38,20 @@ Tạo một hàng cho mỗi dây. Điền đủ cả dây nguồn và GND. Bản
 
 | Từ           | Đến          | Nhãn mạch         | Ghi chú                         |
 | ------------ | ------------ | ----------------- | ------------------------------- |
-| ESP32 GPIO13 | L298N IN1    | `LEFT_IN1`       | Kênh A: hai motor bên trái      |
-| ESP32 GPIO12 | L298N IN2    | `LEFT_IN2`       | Kênh A: hai motor bên trái      |
-| ESP32 GPIO14 | L298N IN3    | `RIGHT_IN3`      | Kênh B: hai motor bên phải      |
-| ESP32 GPIO27 | L298N IN4    | `RIGHT_IN4`      | Kênh B: hai motor bên phải      |
+| ESP32 GPIO26 | L298N IN1    | `LEFT_IN1`       | Chiều quay kênh A              |
+| ESP32 GPIO27 | L298N IN2    | `LEFT_IN2`       | Chiều quay kênh A              |
+| ESP32 GPIO12 | L298N IN3    | `RIGHT_IN3`      | Chiều quay kênh B              |
+| ESP32 GPIO13 | L298N IN4    | `RIGHT_IN4`      | Chiều quay kênh B              |
+| ESP32 GPIO25 | L298N ENA    | `LEFT_ENA`       | PWM tốc độ kênh A              |
+| ESP32 GPIO14 | L298N ENB    | `RIGHT_ENB`      | PWM tốc độ kênh B              |
 | ESP32 GND    | L298N GND    | `GND`             | mass chung                      |
 
 Thêm các hàng còn thiếu cho:
 
 - Hai motor bên trái mắc song song vào cặp `OUT1`/`OUT2` (kênh A).
 - Hai motor bên phải mắc song song vào cặp `OUT3`/`OUT4` (kênh B).
-- Giữ `ENA`/`ENB` của module ở trạng thái bật (jumper theo module đang dùng).
-  HUD tạo PWM trên `IN1`–`IN4` để chỉnh riêng tốc độ hai bên bánh;
-  không cần thêm dây GPIO cho `ENA`/`ENB`.
+- Tháo jumper `ENA`/`ENB` khi nối hai chân này với ESP32. PWM đi qua `ENA` và
+  `ENB`; `IN1`–`IN4` chỉ chọn chiều quay.
 - Nguồn pin vào L298N; đường 5 V/3.3 V vào ESP32.
 - Mọi điện trở, công tắc, công tắc nguồn, tụ hoặc mạch hạ áp.
 

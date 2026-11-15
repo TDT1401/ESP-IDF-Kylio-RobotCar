@@ -18,6 +18,7 @@ idf_component_register(
         esp_http_server
         esp_netif
         esp_hid
+        esp_rom
         esp_timer
         esp_wifi
         espressif__cjson

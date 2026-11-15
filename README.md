@@ -9,8 +9,10 @@ startup notification with the web address.
 ## Wiring
 
 See [HOW_TO_DRAW_WIRING_DIAGRAM.md](HOW_TO_DRAW_WIRING_DIAGRAM.md) for the
-current motor and ESP32 wiring checklist. GPIO18, GPIO5, GPIO26, GPIO25,
-GPIO33, and GPIO32 are no longer used by this firmware.
+current motor and ESP32 wiring checklist. Motor direction uses IN1=GPIO26,
+IN2=GPIO27, IN3=GPIO12, IN4=GPIO13. PWM uses ENA=GPIO25 and ENB=GPIO14;
+remove both enable jumpers when wiring these pins to the ESP32. GPIO18,
+GPIO5, GPIO33, and GPIO32 are not used by this firmware.
 
 ## Configure local secrets
 
@@ -97,8 +99,8 @@ consumption. Touching either control takes over from the other. Use **Thoát
 HUD** to return to the basic controls.
 Releasing the joystick, leaving HUD, or losing command heartbeats stops both
 sides. If the browser does not support the Fullscreen API, HUD still fills the
-available viewport. Keep the L298N ENA and ENB jumpers enabled; PWM uses
-IN1–IN4, so the existing wiring needs no additional GPIO connections.
+available viewport. Motor speed is controlled by PWM on the L298N ENA and ENB
+pins; IN1–IN4 select direction.
 
 ## Bluetooth gamepad
 
