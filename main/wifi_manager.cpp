@@ -4,7 +4,7 @@
 #include <cstdio>
 #include <cstring>
 
-#include "app_config.h"
+#include "config/app_config.h"
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_netif.h"
@@ -185,7 +185,7 @@ esp_err_t wifi_manager_start()
     }
     if (!select_first_network()) {
         ESP_LOGE(kTag,
-                 "No Wi-Fi network configured. Create main/secrets.local.h");
+                 "No Wi-Fi network configured. Create main/config/secrets.local.h");
         return ESP_ERR_INVALID_STATE;
     }
     if (esp_netif_create_default_wifi_sta() == nullptr) {

@@ -4,7 +4,7 @@
 #include <cstdio>
 #include <string>
 
-#include "app_config.h"
+#include "config/app_config.h"
 #include "cJSON.h"
 #include "esp_crt_bundle.h"
 #include "esp_http_client.h"

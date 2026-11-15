@@ -78,7 +78,7 @@ hoặc kẹt bánh, trước khi vận hành.
 
 ## Bước 5 — kiểm tra trước khi xem là hoàn tất
 
-- Mỗi GPIO trong `main/app_config.h` xuất hiện đúng một lần trong bảng.
+- Mỗi GPIO trong `main/config/app_config.h` xuất hiện đúng một lần trong bảng.
 - Không có GPIO nào nối nhầm vào `OUT1`–`OUT4` của L298N.
 - Tất cả module dùng chung GND.
 - Hai motor bên trái chung kênh A, hai motor bên phải chung kênh B.
@@ -92,4 +92,4 @@ module. Khi thay đổi dây hoặc GPIO, cập nhật đồng thời:
 
 1. bảng kết nối;
 2. schematic;
-3. `main/app_config.h` trong firmware.
+3. `main/config/app_config.h` trong firmware.

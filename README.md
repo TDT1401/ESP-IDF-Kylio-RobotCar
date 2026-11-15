@@ -17,10 +17,10 @@ GPIO33, and GPIO32 are no longer used by this firmware.
 Create the local configuration file once:
 
 ```powershell
-Copy-Item .\main\secrets.example.h .\main\secrets.local.h
+Copy-Item .\main\config\secrets.example.h .\main\config\secrets.local.h
 ```
 
-Edit `main/secrets.local.h` and set:
+Edit `main/config/secrets.local.h` and set:
 
 - the Wi-Fi SSID and password;
 - a newly generated Telegram bot token and its allowed chat ID;

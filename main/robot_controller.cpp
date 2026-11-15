@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <limits>
 
-#include "app_config.h"
+#include "config/app_config.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"

@@ -7,7 +7,7 @@
 #include <cstring>
 #include <string>
 
-#include "app_config.h"
+#include "config/app_config.h"
 #include "bluetooth_gamepad.h"
 #include "cJSON.h"
 #include "esp_http_server.h"
