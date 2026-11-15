@@ -1,13 +1,14 @@
-# Hierarchical Layered Architecture — Ruby RobotCar
+# Hierarchical Layered Architecture — Kylio RobotCar
 
 ## 1. Introduction
 
 **Hierarchical Layered Architecture** chia module thành các layer có trách nhiệm
 rõ ràng. Layer nhận yêu cầu chỉ gọi API của layer điều phối; layer điều phối quyết
 định chế độ, an toàn và mục tiêu chuyển động; layer phần cứng thực hiện GPIO/PWM
-và đọc cảm biến. Dữ liệu trả về đi qua **Read-only Snapshot** của controller.
+và đọc cảm biến khi được bổ sung. Dữ liệu chuyển động trả về đi qua
+**Read-only Snapshot** của controller.
 Nhờ vậy, thêm một giao diện hoặc chế độ lái không tạo thêm đường điều khiển motor
-riêng và không buộc core XiaoZhi biết chi tiết của board này.
+riêng và không buộc layer nhận yêu cầu biết chi tiết của board này.
 
 Tài liệu này là quy ước cho `main/`.
 
@@ -46,9 +47,8 @@ khởi động, không tham gia đường điều khiển chuyển động.
 
 ## 3. Source Structure
 
-Đây là **cấu trúc thư mục đề xuất**, chưa phải cấu trúc source hiện tại. Mỗi
-layer trong sơ đồ ở mục 2 có một folder riêng. Các file vẫn có thể thuộc cùng
-ESP-IDF component `main`.
+Đây là **cấu trúc source hiện tại**. Mỗi layer trong sơ đồ ở mục 2 có một folder
+riêng; các file vẫn thuộc cùng ESP-IDF component `main`.
 
 ```text
 main/
@@ -104,11 +104,10 @@ main/
   gọi `motor_controller_init()` để đưa các chân điều khiển về LOW trước khi
   bắt đầu task nhận lệnh.
 
-`MotorMotion` hiện được khai báo trong `motor_controller.h` dù web và controller
-cũng sử dụng. Khi chuyển sang cấu trúc này, kiểu lệnh công khai nên thuộc
-`control/`, để `input/` không phụ thuộc vào header phần cứng. Chưa có cảm biến
-trong source hiện tại; nếu bổ sung, driver cảm biến nằm trong `hardware/`, còn
-quyết định dựa trên số đo nằm trong `control/`.
+`MotorMotion` nằm trong `control/robot_controller.h`, vì đây là kiểu lệnh công
+khai cho `input/`. `hardware/motor_controller.h` chỉ cung cấp API công suất
+motor. Chưa có cảm biến trong source hiện tại; nếu bổ sung, driver cảm biến nằm
+trong `hardware/`, còn quyết định dựa trên số đo nằm trong `control/`.
 
 ## 4. Command Interface
 

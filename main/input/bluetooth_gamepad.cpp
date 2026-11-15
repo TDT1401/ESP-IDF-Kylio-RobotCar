@@ -14,7 +14,7 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "robot_controller.h"
+#include "control/robot_controller.h"
 
 #if CONFIG_BT_BLE_ENABLED
 #include "esp_gattc_api.h"

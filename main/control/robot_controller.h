@@ -3,7 +3,14 @@
 #include <cstdint>
 
 #include "esp_err.h"
-#include "motor_controller.h"
+
+enum class MotorMotion {
+    Stop,
+    Forward,
+    Backward,
+    Left,
+    Right,
+};
 
 struct RobotSnapshot {
     MotorMotion motion;

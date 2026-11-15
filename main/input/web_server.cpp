@@ -14,9 +14,9 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "mbedtls/base64.h"
-#include "robot_controller.h"
+#include "control/robot_controller.h"
 #include "web_page.h"
-#include "wifi_manager.h"
+#include "services/wifi_manager.h"
 
 namespace {
 

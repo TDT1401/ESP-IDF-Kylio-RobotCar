@@ -1,13 +1,13 @@
 idf_component_register(
     SRCS
         "main.cpp"
-        "bluetooth_gamepad.cpp"
-        "esp_hid_gap.c"
-        "motor_controller.cpp"
-        "robot_controller.cpp"
-        "telegram_client.cpp"
-        "web_server.cpp"
-        "wifi_manager.cpp"
+        "input/bluetooth_gamepad.cpp"
+        "input/esp_hid_gap.c"
+        "input/web_server.cpp"
+        "control/robot_controller.cpp"
+        "hardware/motor_controller.cpp"
+        "services/telegram_client.cpp"
+        "services/wifi_manager.cpp"
     INCLUDE_DIRS "."
     REQUIRES
         esp-tls

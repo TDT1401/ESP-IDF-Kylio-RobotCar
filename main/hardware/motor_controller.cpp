@@ -26,8 +26,8 @@ uint32_t duty_for(int percent)
 void set_channel(ledc_channel_t forward_pin, ledc_channel_t reverse_pin,
                  int power)
 {
-    // Motor writes are serialized by the robot controller mutex. Clear the
-    // opposite input before enabling the new direction.
+    // The caller serializes motor writes. Clear the opposite input before
+    // enabling the new direction.
     if (power >= 0) {
         ESP_ERROR_CHECK(ledc_set_duty(kSpeedMode, reverse_pin, 0));
         ESP_ERROR_CHECK(ledc_update_duty(kSpeedMode, reverse_pin));

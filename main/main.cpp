@@ -1,12 +1,12 @@
 #include "esp_err.h"
 #include "esp_log.h"
-#include "bluetooth_gamepad.h"
-#include "motor_controller.h"
+#include "input/bluetooth_gamepad.h"
+#include "hardware/motor_controller.h"
 #include "nvs_flash.h"
-#include "robot_controller.h"
-#include "telegram_client.h"
-#include "web_server.h"
-#include "wifi_manager.h"
+#include "control/robot_controller.h"
+#include "services/telegram_client.h"
+#include "input/web_server.h"
+#include "services/wifi_manager.h"
 
 namespace {
 
